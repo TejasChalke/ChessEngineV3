@@ -1,29 +1,29 @@
 package game;
 
 public class Pieces {
-    private byte currentCnt;
-    public byte[] positions;
-    public byte[] localBoard;
+    public short currentCnt;
+    public short[] positions;
+    public short[] localBoard;
 
     public Pieces(int count) {
         currentCnt = 0;
-        positions = new byte[count];
-        localBoard = new byte[64];
+        positions = new short[count];
+        localBoard = new short[64];
     }
 
-    public void addPiece(byte square) {
+    public void addPiece(short square) {
         positions[currentCnt] = square;
         localBoard[square] = currentCnt++;
     }
 
-    public void removePiece(byte square) {
+    public void removePiece(short square) {
         currentCnt--;
         if (currentCnt == 0) {
             return;
         }
 
-        byte positionIndex = localBoard[square];
-        byte squareToUpdate = positions[currentCnt];
+        short positionIndex = localBoard[square];
+        short squareToUpdate = positions[currentCnt];
 
         // more than 1 remaining
         localBoard[squareToUpdate] = positionIndex;

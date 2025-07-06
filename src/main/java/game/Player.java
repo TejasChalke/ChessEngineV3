@@ -3,18 +3,20 @@ package game;
 import util.PieceUtil;
 
 public class Player {
-    public static byte WHITE = 0;
-    public static byte BLACK = 64;
+    public static short WHITE = 0b01000000;
+    public static short BLACK = 0b10000000;
+    public static short COLOR_MASK = 0b11000000;
 
-    public int kingSquare;
+    public short kingSquare;
     public Pieces queens;
     public Pieces pawns;
     public Pieces rooks;
     public Pieces bishops;
     public Pieces knights;
     private String name;
+    public short color;
 
-    public Player(String name) {
+    public Player(String name, short color) {
         this.name = name;
         kingSquare = -1;
         queens = new Pieces(10);
@@ -22,6 +24,7 @@ public class Player {
         rooks = new Pieces(10);
         bishops = new Pieces(10);
         knights = new Pieces(10);
+        this.color = color;
     }
 
     public String getName() {
