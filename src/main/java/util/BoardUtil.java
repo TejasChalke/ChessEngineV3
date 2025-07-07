@@ -20,14 +20,12 @@ public class BoardUtil {
 
     public static short[][] moveCnt;
     public static short[] moveOffsets;
-    public static short[] kingOffsets;
     public static boolean[][][] collinearPoints;
 
     static {
         // up, down, left, right, tr, tl, br, bl
         moveOffsets = new short[] {8, -8, -1, 1, 9, 7, -7, -9};
         moveCnt = new short[64][];
-        kingOffsets = new short[] {-9, -8, -7, -1, 1, 7, 8, 9};
         KNIGHT_MOVES = new ArrayList[64];
 
         for (short rank = 0; rank < 8; rank++) {
@@ -85,6 +83,20 @@ public class BoardUtil {
         for (short rank = 7; rank >= 0; rank--) {
             for (short file = 0; file < 8; file++) {
                 System.out.printf("%2c ", PieceUtil.getPieceChar(board[getSquare(rank, file)]));
+            }
+            System.out.println();
+        }
+        System.out.println("------------------------------");
+    }
+
+    public static void displayAttackMask(long attackMask) {
+        System.out.println("------------------------------");
+        for (short rank = 7; rank >= 0; rank--) {
+            for (short file = 0; file < 8; file++) {
+                short square = getSquare(rank, file);
+                long squareMask = 1L << square;
+                char c = (attackMask & squareMask) != 0 ? '#' : '.';
+                System.out.printf("%2c ", c);
             }
             System.out.println();
         }

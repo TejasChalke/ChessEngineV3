@@ -25,6 +25,7 @@ public class MoveGenerator {
         opponent = manager.getOpponent();
 
         setAttackMask();
+//        BoardUtil.displayAttackMask(attackMask);
         return generateLegalMoves(capturesOnly);
     }
 
@@ -32,17 +33,17 @@ public class MoveGenerator {
         ArrayList<Move> legalMoves = new ArrayList<>();
 
         // king moves
-        for (short offset : BoardUtil.kingOffsets) {
+        for (short offset : BoardUtil.moveOffsets) {
             short targetSquare = (short)(offset + player.kingSquare);
             if (targetSquare < 0 || targetSquare > 63) continue;
 
             short targetPiece = PieceUtil.getPieceType(manager.board[targetSquare]);
-            if (isSquareSafe(targetSquare) && ((targetPiece == PieceUtil.TYPE_NONE && !capturesOnly) || (targetPiece != PieceUtil.TYPE_NONE && PieceUtil.getPieceColor(manager.board[targetSquare]) == opponent.color))) {
-                // the square must be safe
-                // if an empty square capturesOnly must be false (normal move)
-                // if not empty, must be an enemy piece
-                int gain = targetPiece == PieceUtil.TYPE_NONE ? 0 : PieceUtil.getPieceValue(targetPiece);
-                legalMoves.add(new Move(player.kingSquare, targetSquare, Move.MOVE_DEFAULT, gain));
+            if (isSquareSafe(targetSquare)) {
+                if (targetPiece == PieceUtil.TYPE_NONE && !capturesOnly) {
+                    legalMoves.add(new Move(player.kingSquare, targetSquare, Move.MOVE_DEFAULT, 0));
+                } else if (targetPiece != PieceUtil.TYPE_NONE && PieceUtil.getPieceColor(manager.board[targetSquare]) == opponent.color) {
+                    legalMoves.add(new Move(player.kingSquare, targetSquare, Move.MOVE_DEFAULT, PieceUtil.getPieceValue(targetPiece)));
+                }
             }
         }
         if (isDoubleChecked) return legalMoves;
@@ -65,7 +66,7 @@ public class MoveGenerator {
 
         legalMoves.addAll(getSlidingMoves(player.queens, 0, 7, capturesOnly));
         legalMoves.addAll(getSlidingMoves(player.rooks, 0, 3, capturesOnly));
-        legalMoves.addAll(getSlidingMoves(player.queens, 4, 7, capturesOnly));
+        legalMoves.addAll(getSlidingMoves(player.bishops, 4, 7, capturesOnly));
         legalMoves.addAll(getKnightMoves(player.knights, capturesOnly));
         legalMoves.addAll(getPawnMoves(player.pawns, capturesOnly));
 
@@ -82,7 +83,7 @@ public class MoveGenerator {
         setPawnAttackMask(opponent.pawns);
 
         // king attack mask
-        for (short offset : BoardUtil.kingOffsets) {
+        for (short offset : BoardUtil.moveOffsets) {
             short targetSquare = (short)(offset + opponent.kingSquare);
             if (targetSquare >= 0 && targetSquare < 64) {
                 attackMask |= 1L << targetSquare;
@@ -165,12 +166,15 @@ public class MoveGenerator {
     private void setPawnAttackMask(Pieces pieces) {
         for (int i = 0; i < pieces.currentCnt; i++) {
             short pieceSquare = pieces.positions[i];
-            boolean canAttackLeft = pieceSquare % 8 != 0;
-            boolean canAttackRight = pieceSquare % 7 != 0;
+            short file = (short)(pieceSquare % 8);
 
-            if (canAttackLeft) {
+            if (file > 0) {
                 int targetSquare = opponent.color == Player.WHITE ? pieceSquare + 7 : pieceSquare - 9;
                 attackMask |= 1L << targetSquare;
+                if (targetSquare == 66) {
+                    BoardUtil.displayBoard(manager.board);
+                    System.out.println("WTF");
+                }
 
                 if (PieceUtil.getPieceType(manager.board[targetSquare]) == PieceUtil.TYPE_KING && PieceUtil.getPieceColor(manager.board[targetSquare]) == player.color) {
                     if (isChecked) isDoubleChecked = true;
@@ -178,7 +182,7 @@ public class MoveGenerator {
                     checkMask |= 1L << targetSquare;
                 }
             }
-            if (canAttackRight) {
+            if (file < 7) {
                 int targetSquare = opponent.color == Player.WHITE ? pieceSquare + 9 : pieceSquare - 7;
                 attackMask |= 1L << targetSquare;
 
@@ -192,22 +196,19 @@ public class MoveGenerator {
     }
 
     private boolean isSquareSafe(short square) {
-        return (square & attackMask) != 0;
+        return ((1L << square) & attackMask) == 0;
     }
 
     private boolean isSquarePinned(short square) {
-        return (square & pinMask) != 0;
+        return ((1L << square) & pinMask) != 0;
     }
 
     private boolean isBlockingCheck(short square) {
-        return (square & checkMask) != 0;
+        return ((1L << square) & checkMask) != 0;
     }
 
     private ArrayList<Move> getSlidingMoves(Pieces pieces, int dirStart, int dirEnd, boolean capturesOnly) {
         ArrayList<Move> legalMoves = new ArrayList<>();
-//        if (!manager.whiteToMove) {
-//            BoardUtil.displayBoard(manager.board);
-//        }
         for (int i = 0; i < pieces.currentCnt; i++) {
             short pieceSquare = pieces.positions[i];
             for (int dir = dirStart; dir <= dirEnd; dir++) {
@@ -223,13 +224,14 @@ public class MoveGenerator {
                     short targetPiece = PieceUtil.getPieceType(manager.board[targetSquare]);
                     short targetPieceColor = PieceUtil.getPieceColor(manager.board[targetSquare]);
 
-                    if (targetPiece != PieceUtil.TYPE_NONE && targetPieceColor == player.color) {
+                    if (targetPiece != PieceUtil.TYPE_NONE) {
+                        if (targetPieceColor == opponent.color) {
+                            int gain = PieceUtil.getPieceValue(targetPiece) - PieceUtil.getPieceValue(manager.board[pieceSquare]) / 10;
+                            legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, gain));
+                        }
                         break;
-                    }
-                    if (((targetPiece == PieceUtil.TYPE_NONE && !capturesOnly) || (targetPiece != PieceUtil.TYPE_NONE && targetPieceColor == opponent.color))
-                            && (!isChecked || isBlockingCheck(targetSquare))) {
-                        int gain = targetPiece == PieceUtil.TYPE_NONE ? 0 : PieceUtil.getPieceValue(targetPiece) - PieceUtil.getPieceValue(manager.board[pieceSquare]) / 10;
-                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, gain));
+                    } else if (!capturesOnly) {
+                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, 0));
                     }
                 }
             }

@@ -49,7 +49,7 @@ public class Manager {
 
                     if (c == 'k' || c == 'K') player.kingSquare = square;
                     else player.getPieces(c).addPiece(square);
-                    board[square] = (short)(PieceUtil.getPieceMask(c) | player.color);
+                    board[square] = PieceUtil.getPieceMask(c);
                     file++;
                 }
             }

@@ -41,13 +41,14 @@ public class Player {
         return pieces;
     }
 
-    public Pieces getPieces(int n) {
-        Pieces pieces = null;
-        if (PieceUtil.TYPE_PAWN == n) pieces = pawns;
-        else if (PieceUtil.TYPE_QUEEN == n) pieces = queens;
-        else if (PieceUtil.TYPE_ROOK == n) pieces = rooks;
-        else if (PieceUtil.TYPE_BISHOP == n) pieces = bishops;
-        else if (PieceUtil.TYPE_KNIGHT == n) pieces = knights;
-        return pieces;
+    public Pieces getPieces(short n) {
+        short mask = (short)(n & PieceUtil.PIECE_MASK);
+        return switch (mask) {
+            case PieceUtil.TYPE_QUEEN -> queens;
+            case PieceUtil.TYPE_PAWN -> pawns;
+            case PieceUtil.TYPE_ROOK -> rooks;
+            case PieceUtil.TYPE_BISHOP -> bishops;
+            default -> knights;
+        };
     }
 }
