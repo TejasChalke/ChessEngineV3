@@ -4,6 +4,7 @@ import game.Move;
 import game.Player;
 
 public class PieceUtil {
+    public static final short TYPE_INVALID = -1;
     public static final short TYPE_NONE = 0;
     public static final short TYPE_KING = 0b00000001;
     public static final short TYPE_QUEEN = 0b00000010;
@@ -63,7 +64,8 @@ public class PieceUtil {
             case TYPE_PAWN -> PAWN_VALUE;
             case TYPE_ROOK -> ROOK_VALUE;
             case TYPE_BISHOP -> BISHOP_VALUE;
-            default -> KNIGHT_VALUE;
+            case TYPE_KNIGHT -> KNIGHT_VALUE;
+            default -> 0;
         };
     }
 
@@ -77,7 +79,8 @@ public class PieceUtil {
             case Move.MOVE_P_QUEEN -> TYPE_QUEEN;
             case Move.MOVE_P_ROOK -> TYPE_ROOK;
             case Move.MOVE_P_BISHOP -> TYPE_BISHOP;
-            default -> TYPE_KNIGHT;
+            case Move.MOVE_P_KNIGHT -> TYPE_KNIGHT;
+            default -> TYPE_INVALID;
         };
     }
 }

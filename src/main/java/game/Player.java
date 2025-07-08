@@ -48,7 +48,8 @@ public class Player {
             case PieceUtil.TYPE_PAWN -> pawns;
             case PieceUtil.TYPE_ROOK -> rooks;
             case PieceUtil.TYPE_BISHOP -> bishops;
-            default -> knights;
+            case PieceUtil.TYPE_KNIGHT -> knights;
+            default -> null;
         };
     }
 }

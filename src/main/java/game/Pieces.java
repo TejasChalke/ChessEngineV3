@@ -12,9 +12,6 @@ public class Pieces {
     }
 
     public void addPiece(short square) {
-        if (square == 59) {
-            System.out.println("Wrong add!");
-        }
         positions[currentCnt] = square;
         localBoard[square] = currentCnt++;
     }
@@ -33,9 +30,6 @@ public class Pieces {
     }
 
     public void updatePosition(short startSquare, short targetSquare) {
-        if (targetSquare == 59 && currentCnt > 4) {
-            System.out.println("Wrong update from : " + startSquare);
-        }
         short positionIndex = localBoard[startSquare];
         positions[positionIndex] = targetSquare;
         localBoard[targetSquare] = positionIndex;

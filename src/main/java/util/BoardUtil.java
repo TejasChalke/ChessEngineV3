@@ -17,6 +17,7 @@ public class BoardUtil {
     public static final short BLACK_QS_ROOK = 56;
 
     public static ArrayList<Short>[] KNIGHT_MOVES;
+    public static ArrayList<Short>[] KING_MOVES;
 
     public static short[][] moveCnt;
     public static short[] moveOffsets;
@@ -27,6 +28,7 @@ public class BoardUtil {
         moveOffsets = new short[] {8, -8, -1, 1, 9, 7, -7, -9};
         moveCnt = new short[64][];
         KNIGHT_MOVES = new ArrayList[64];
+        KING_MOVES = new ArrayList[64];
 
         for (short rank = 0; rank < 8; rank++) {
             for (short file = 0; file < 8; file++) {
@@ -42,6 +44,19 @@ public class BoardUtil {
                         (short)Math.min(rank, file)
                 };
                 KNIGHT_MOVES[square] = getKnightMoves(rank, file);
+                KING_MOVES[square] = new ArrayList<>();
+                if (rank > 0) {
+                    KING_MOVES[square].add(getSquare((byte)(rank - 1), file));
+                    if (file > 0) KING_MOVES[square].add(getSquare((byte)(rank - 1), (byte)(file - 1)));
+                    if (file < 7) KING_MOVES[square].add(getSquare((byte)(rank - 1), (byte)(file + 1)));
+                }
+                if (rank < 7) {
+                    KING_MOVES[square].add(getSquare((byte)(rank + 1), file));
+                    if (file > 0) KING_MOVES[square].add(getSquare((byte)(rank + 1), (byte)(file - 1)));
+                    if (file < 7) KING_MOVES[square].add(getSquare((byte)(rank + 1), (byte)(file + 1)));
+                }
+                if (file > 0) KING_MOVES[square].add(getSquare(rank, (byte)(file - 1)));
+                if (file < 7) KING_MOVES[square].add(getSquare(rank, (byte)(file + 1)));
             }
         }
 
@@ -76,31 +91,6 @@ public class BoardUtil {
 
     public static short getSquare(short rank, short file) {
         return (short)(rank * 8 + file);
-    }
-
-    public static void displayBoard(short[] board) {
-        System.out.println("------------------------------");
-        for (short rank = 7; rank >= 0; rank--) {
-            for (short file = 0; file < 8; file++) {
-                System.out.printf("%2c ", PieceUtil.getPieceChar(board[getSquare(rank, file)]));
-            }
-            System.out.println();
-        }
-        System.out.println("------------------------------");
-    }
-
-    public static void displayAttackMask(long attackMask) {
-        System.out.println("------------------------------");
-        for (short rank = 7; rank >= 0; rank--) {
-            for (short file = 0; file < 8; file++) {
-                short square = getSquare(rank, file);
-                long squareMask = 1L << square;
-                char c = (attackMask & squareMask) != 0 ? '#' : '.';
-                System.out.printf("%2c ", c);
-            }
-            System.out.println();
-        }
-        System.out.println("------------------------------");
     }
 
     public static boolean isMovingOnThePinLine(int k, int p, int t) {
@@ -139,5 +129,39 @@ public class BoardUtil {
             a = temp;
         }
         return a == 0 ? 1 : a;
+    }
+
+    public static void displayBoard(short[] board) {
+        System.out.println("------------------------------");
+//        for (short rank = 7; rank >= 0; rank--) {
+//            for (short file = 0; file < 8; file++) {
+//                char c = PieceUtil.getPieceChar(board[getSquare(rank, file)]);
+//                System.out.printf("%3s ", c == '-' ? getSquare(rank, file) + "" : '-');
+//            }
+//            System.out.println();
+//        }
+//        System.out.println("------------------------------");
+        for (short rank = 7; rank >= 0; rank--) {
+            for (short file = 0; file < 8; file++) {
+                char c = PieceUtil.getPieceChar(board[getSquare(rank, file)]);
+                System.out.printf("%3s ", c);
+            }
+            System.out.println();
+        }
+        System.out.println("------------------------------");
+    }
+
+    public static void displayAttackMask(long attackMask) {
+        System.out.println("------------------------------");
+        for (short rank = 7; rank >= 0; rank--) {
+            for (short file = 0; file < 8; file++) {
+                short square = getSquare(rank, file);
+                long squareMask = 1L << square;
+                char c = (attackMask & squareMask) != 0 ? '#' : '.';
+                System.out.printf("%2c ", c);
+            }
+            System.out.println();
+        }
+        System.out.println("------------------------------");
     }
 }

@@ -15,6 +15,8 @@ public class Engine {
     private int currentMaxDepth;
     Stack<MoveInfo> previousMoves;
     private int positionsReached;
+    private int enPassants;
+    private int captures;
 
     private final int MAX_EVAL = (int)1e7;
 
@@ -38,9 +40,10 @@ public class Engine {
     }
 
     public void test(int depth) {
-        positionsReached = 0;
+        positionsReached = enPassants = captures = 0;
         findBestMove(depth, 0);
         System.out.println("At depth " + depth + ", number of positions reached : " + positionsReached);
+        System.out.println("En-passants : " + enPassants + ", Captures : " + captures);
     }
 
     public int findBestMove(int depth, int depthFromRoot) {
@@ -60,7 +63,7 @@ public class Engine {
 
         int currentBestEval = manager.whiteToMove ? Integer.MIN_VALUE : Integer.MAX_VALUE;
         for (Move move : legaMoves) {
-            makeMove(move);
+            makeMove(move, depthFromRoot + 1);
             int currentEval = findBestMove(depth - 1, depthFromRoot + 1);
             if (manager.whiteToMove && currentEval > currentBestEval) {
                 currentBestEval = currentEval;
@@ -78,19 +81,15 @@ public class Engine {
         return currentBestEval;
     }
 
-    public void makeMove(Move move) {
+    public void makeMove(Move move, int movesPlayed) {
         MoveInfo moveInfo = new MoveInfo(manager.epSquare, manager.castleRights);
         manager.epSquare = -1;
 
-        if (manager.whiteToMove && move.targetSquare == 59 && manager.white.kingSquare == 6 && manager.board[38] == (short)(Player.BLACK | PieceUtil.TYPE_PAWN)) {
-            System.out.println("Problematic");
-            BoardUtil.displayBoard(manager.board);
-        }
         if (Move.isPromotionMove(move.moveType)) {
             short targetPiece = manager.board[move.targetSquare];
             if (targetPiece != PieceUtil.TYPE_NONE) {
-                moveInfo.piece = targetPiece;
                 manager.getOpponent().getPieces(targetPiece).removePiece(move.targetSquare);
+                captures++;
             }
 
             short newPiece = (short)(PieceUtil.getPromotionPiece(move.moveType) | manager.getPlayer().color);
@@ -124,18 +123,21 @@ public class Engine {
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.startSquare, move.targetSquare);
         } else if (Move.MOVE_EP == move.moveType) {
             manager.board[move.targetSquare] = manager.board[move.startSquare];
+            manager.board[move.startSquare] = PieceUtil.TYPE_NONE;
+
             moveInfo.piece = manager.board[move.targetSquare + (manager.whiteToMove ? -8 : 8)];
             manager.board[move.targetSquare + (manager.whiteToMove ? -8 : 8)] = PieceUtil.TYPE_NONE;
+
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.startSquare, move.targetSquare);
+            manager.getOpponent().getPieces(PieceUtil.TYPE_PAWN).removePiece((short)(move.targetSquare + (manager.whiteToMove ? -8 : 8)));
+            enPassants++;
         } else {
             short targetPiece = manager.board[move.targetSquare];
             if (targetPiece != PieceUtil.TYPE_NONE) {
                 moveInfo.piece = targetPiece;
                 manager.getOpponent().getPieces(targetPiece).removePiece(move.targetSquare);
+                captures++;
             }
-//            if (move.targetSquare == 59 && moveInfo.piece != PieceUtil.TYPE_NONE) {
-//                BoardUtil.displayBoard(manager.board);
-//            }
 
             manager.board[move.targetSquare] = manager.board[move.startSquare];
             manager.board[move.startSquare] = PieceUtil.TYPE_NONE;
@@ -162,10 +164,6 @@ public class Engine {
                 manager.removePlayerCastleRights();
                 manager.getPlayer().kingSquare = move.targetSquare;
             }
-
-//            if (move.targetSquare == 59 && moveInfo.piece != PieceUtil.TYPE_NONE) {
-//                BoardUtil.displayBoard(manager.board);
-//            }
         }
 
         manager.whiteToMove = !manager.whiteToMove;
@@ -174,62 +172,58 @@ public class Engine {
 
     private void unMakeMove(Move move) {
         MoveInfo moveInfo = previousMoves.pop();
+        manager.whiteToMove = !manager.whiteToMove;
+        manager.epSquare = moveInfo.epSquare;
+        manager.castleRights = moveInfo.castleRights;
 
         if (Move.isPromotionMove(move.moveType)) {
-            manager.getOpponent().getPieces(PieceUtil.TYPE_PAWN).addPiece(move.startSquare);
-            manager.getOpponent().getPieces(manager.board[move.targetSquare]).removePiece(move.targetSquare);
+            manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).addPiece(move.startSquare);
+            manager.getPlayer().getPieces(manager.board[move.targetSquare]).removePiece(move.targetSquare);
             if (moveInfo.piece != PieceUtil.TYPE_NONE) {
-                manager.getPlayer().getPieces(moveInfo.piece).addPiece(move.targetSquare);
+                manager.getOpponent().getPieces(moveInfo.piece).addPiece(move.targetSquare);
             }
 
-            manager.board[move.startSquare] = (short)(PieceUtil.TYPE_PAWN | manager.getOpponent().color);
+            manager.board[move.startSquare] = (short)(PieceUtil.TYPE_PAWN | manager.getPlayer().color);
             manager.board[move.targetSquare] = moveInfo.piece;
         } else if (Move.MOVE_CKS == move.moveType) {
-            short kingSquare = manager.getOpponent().kingSquare;
-            manager.getOpponent().getPieces(PieceUtil.TYPE_ROOK).updatePosition((short)(kingSquare - 1), (short)(kingSquare + 1));
+            short kingSquare = manager.getPlayer().kingSquare;
+            manager.getPlayer().getPieces(PieceUtil.TYPE_ROOK).updatePosition((short)(kingSquare - 1), (short)(kingSquare + 1));
 
             manager.board[kingSquare + 1] = manager.board[kingSquare - 1];
             manager.board[kingSquare - 2] = manager.board[kingSquare];
             manager.board[kingSquare] = manager.board[kingSquare - 1] = PieceUtil.TYPE_NONE;
-            manager.getOpponent().kingSquare = move.startSquare;
+            manager.getPlayer().kingSquare = move.startSquare;
         } else if (Move.MOVE_CQS == move.moveType) {
-            short kingSquare = manager.getOpponent().kingSquare;
-            manager.getOpponent().getPieces(PieceUtil.TYPE_ROOK).updatePosition((short)(kingSquare + 1), (short)(kingSquare - 2));
+            short kingSquare = manager.getPlayer().kingSquare;
+            manager.getPlayer().getPieces(PieceUtil.TYPE_ROOK).updatePosition((short)(kingSquare + 1), (short)(kingSquare - 2));
 
             manager.board[kingSquare - 2] = manager.board[kingSquare + 1];
             manager.board[kingSquare + 2] = manager.board[kingSquare];
             manager.board[kingSquare] = manager.board[kingSquare + 1] = PieceUtil.TYPE_NONE;
-            manager.getOpponent().kingSquare = move.startSquare;
+            manager.getPlayer().kingSquare = move.startSquare;
         } else if (Move.MOVE_2_SQUARES == move.moveType) {
             manager.board[move.startSquare] = manager.board[move.targetSquare];
             manager.board[move.targetSquare] = PieceUtil.TYPE_NONE;
-            manager.getOpponent().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.targetSquare, move.startSquare);
+            manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.targetSquare, move.startSquare);
         } else if (Move.MOVE_EP == move.moveType) {
             manager.board[move.startSquare] = manager.board[move.targetSquare];
-            manager.board[move.targetSquare + (manager.whiteToMove ? 8 : -8)] = moveInfo.piece; // this is reversed because whiteToMove is flipped
-            manager.getOpponent().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.targetSquare, move.startSquare);
+            manager.board[move.targetSquare] = PieceUtil.TYPE_NONE;
+
+            manager.board[move.targetSquare + (manager.whiteToMove ? -8 : 8)] = moveInfo.piece;
+            manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.targetSquare, move.startSquare);
+            manager.getOpponent().getPieces(PieceUtil.TYPE_PAWN).addPiece((short)(move.targetSquare + (manager.whiteToMove ? -8 : 8)));
         } else {
-//            if (move.targetSquare == 59 && moveInfo.piece != PieceUtil.TYPE_NONE) {
-//                BoardUtil.displayBoard(manager.board);
-//            }
-            if (move.targetSquare != manager.getOpponent().kingSquare) {
-                manager.getOpponent().getPieces(manager.board[move.targetSquare]).updatePosition(move.targetSquare, move.startSquare);
+            if (move.targetSquare != manager.getPlayer().kingSquare) {
+                manager.getPlayer().getPieces(manager.board[move.targetSquare]).updatePosition(move.targetSquare, move.startSquare);
             } else {
-                manager.getOpponent().kingSquare = move.startSquare;
+                manager.getPlayer().kingSquare = move.startSquare;
             }
 
             if (moveInfo.piece != PieceUtil.TYPE_NONE) {
-                manager.getPlayer().getPieces(moveInfo.piece).addPiece(move.targetSquare);
+                manager.getOpponent().getPieces(moveInfo.piece).addPiece(move.targetSquare);
             }
             manager.board[move.startSquare] = manager.board[move.targetSquare];
             manager.board[move.targetSquare] = moveInfo.piece;
-//            if (move.targetSquare == 59 && moveInfo.piece != PieceUtil.TYPE_NONE) {
-//                BoardUtil.displayBoard(manager.board);
-//            }
         }
-
-        manager.whiteToMove = !manager.whiteToMove;
-        manager.epSquare = moveInfo.epSquare;
-        manager.castleRights = moveInfo.castleRights;
     }
 }

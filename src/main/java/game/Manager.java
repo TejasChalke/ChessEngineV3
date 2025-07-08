@@ -104,7 +104,8 @@ public class Manager {
     }
 
     public void playMove(Move move) {
-        engine.makeMove(move);
+        engine.makeMove(move, 0);
+        engine.previousMoves.clear();
     }
 
     public void test(int depth) {
