@@ -14,6 +14,9 @@ public class Manager {
     public int fullMoveCnt;
     public Engine engine;
 
+    // debug variables
+    public boolean checkEP = false;
+
     public Manager() {
         this("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     }
@@ -85,7 +88,9 @@ public class Manager {
     }
 
     public void removePlayerCastleRights() {
-        castleRights &= (whiteToMove ? BoardUtil.BLACK_CASTLE_RIGHTS : BoardUtil.WHITE_CASTLE_RIGHTS);
+        if (castleRights != 0) {
+            castleRights &= (whiteToMove ? BoardUtil.BLACK_CASTLE_RIGHTS : BoardUtil.WHITE_CASTLE_RIGHTS);
+        }
     }
 
     public boolean playBotMove() {

@@ -4,15 +4,17 @@ import util.BoardUtil;
 import util.PieceUtil;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 public class MoveGenerator {
     private final Manager manager;
     private Player player;
     private Player opponent;
+    private ArrayList<Move> legalMoves;
 
     public boolean isChecked;
     private boolean isDoubleChecked;
-    private long attackMask;
+    public long attackMask;
     private long pinMask;
     private long checkMask;
 
@@ -25,44 +27,7 @@ public class MoveGenerator {
         opponent = manager.getOpponent();
 
         setAttackMask();
-//        BoardUtil.displayAttackMask(attackMask);
-        return generateLegalMoves(capturesOnly);
-    }
-
-    private ArrayList<Move> generateLegalMoves(boolean capturesOnly) {
-        ArrayList<Move> legalMoves = new ArrayList<>();
-
-        // king moves
-        for (short targetSquare : BoardUtil.KING_MOVES[player.kingSquare]) {
-            short targetPiece = PieceUtil.getPieceType(manager.board[targetSquare]);
-
-            if (isSquareSafe(targetSquare)) {
-                if (targetPiece == PieceUtil.TYPE_NONE && !capturesOnly) {
-                    legalMoves.add(new Move(player.kingSquare, targetSquare, Move.MOVE_DEFAULT, 0));
-                } else if (targetPiece != PieceUtil.TYPE_NONE && PieceUtil.getPieceColor(manager.board[targetSquare]) == opponent.color) {
-                    legalMoves.add(new Move(player.kingSquare, targetSquare, Move.MOVE_DEFAULT, PieceUtil.getPieceValue(targetPiece)));
-                }
-            }
-        }
-        if (isDoubleChecked) return legalMoves;
-
-        boolean canCastleKingSide = (player.color == Player.WHITE ? (manager.castleRights & BoardUtil.WHITE_KSC_MASK) : (manager.castleRights & BoardUtil.BLACK_KSC_MASK)) != 0;
-        boolean canCastleQueenSide = (player.color == Player.WHITE ? (manager.castleRights & BoardUtil.WHITE_QSC_MASK) : (manager.castleRights & BoardUtil.BLACK_QSC_MASK)) != 0;
-
-        // Castling moves
-        if (!isChecked && canCastleKingSide && manager.board[player.kingSquare + 1] == PieceUtil.TYPE_NONE && isSquareSafe((short)(player.kingSquare + 1)) && manager.board[player.kingSquare + 2] == PieceUtil.TYPE_NONE && isSquareSafe((short)(player.kingSquare + 2))) {
-            legalMoves.add(new Move(player.kingSquare, (short)(player.kingSquare + 2), Move.MOVE_CKS, 2000));
-        }
-        if (!isChecked && canCastleQueenSide && manager.board[player.kingSquare - 1] == PieceUtil.TYPE_NONE && isSquareSafe((short)(player.kingSquare - 1)) && manager.board[player.kingSquare - 2] == PieceUtil.TYPE_NONE && isSquareSafe((short)(player.kingSquare - 2)) && manager.board[player.kingSquare - 3] == PieceUtil.TYPE_NONE) {
-            legalMoves.add(new Move(player.kingSquare, (short)(player.kingSquare - 2), Move.MOVE_CQS, 2000));
-        }
-
-        legalMoves.addAll(getSlidingMoves(player.queens, 0, 7, capturesOnly));
-        legalMoves.addAll(getSlidingMoves(player.rooks, 0, 3, capturesOnly));
-        legalMoves.addAll(getSlidingMoves(player.bishops, 4, 7, capturesOnly));
-        legalMoves.addAll(getKnightMoves(player.knights, capturesOnly));
-        legalMoves.addAll(getPawnMoves(player.pawns, capturesOnly));
-
+        generateLegalMoves(capturesOnly);
         return legalMoves;
     }
 
@@ -84,14 +49,13 @@ public class MoveGenerator {
     private void setSlidingAttackMask(Pieces pieces, int dirStart, int dirEnd) {
         for (int i = 0; i < pieces.currentCnt; i++) {
             short pieceSquare = pieces.positions[i];
+
             for (int dir = dirStart; dir <= dirEnd; dir++) {
                 short maxMoves = BoardUtil.moveCnt[pieceSquare][dir];
                 short currentMoves = 0;
 
                 long currentAttackMask = 0;
                 long currentPinMask = 0;
-
-                boolean kingFound = false;
                 boolean otherPieceFound = false;
 
                 while (currentMoves++ < maxMoves) {
@@ -102,20 +66,25 @@ public class MoveGenerator {
                     if (!otherPieceFound) {
                         currentAttackMask |= squareMask;
                     }
-                    if (targetPiece != PieceUtil.TYPE_NONE || otherPieceFound || kingFound) {
+                    if (targetPiece != PieceUtil.TYPE_NONE || otherPieceFound) {
                         if (targetPiece != PieceUtil.TYPE_NONE && PieceUtil.getPieceColor(manager.board[targetSquare]) == opponent.color) {
                             break;
                         }
 
                         if (targetPiece == PieceUtil.TYPE_KING) {
-                            kingFound = true;
                             if (!otherPieceFound) {
                                 if (isChecked) isDoubleChecked = true;
                                 else isChecked = true;
-                                checkMask |= (currentAttackMask ^ squareMask) | (1L << pieceSquare);
+                                checkMask |= (currentAttackMask | (1L << pieceSquare));
+
+                                if (currentMoves < maxMoves) {
+                                    targetSquare += BoardUtil.moveOffsets[dir];
+                                    currentAttackMask |= 1L << targetSquare;
+                                }
                             } else {
                                 pinMask |= currentPinMask;
                             }
+                            break;
                         } else if (targetPiece != PieceUtil.TYPE_NONE) {
                             if (!otherPieceFound) {
                                 // first piece found
@@ -125,9 +94,6 @@ public class MoveGenerator {
                                 // second piece found before the king
                                 break;
                             }
-                        }
-                        if (kingFound && otherPieceFound) {
-                            break;
                         }
                     }
                 }
@@ -139,13 +105,14 @@ public class MoveGenerator {
     private void setKnightAttackMask(Pieces pieces) {
         for (int i = 0; i < pieces.currentCnt; i++) {
             short pieceSquare = pieces.positions[i];
+
             for (short targetSquare : BoardUtil.KNIGHT_MOVES[pieceSquare]) {
                 attackMask |= 1L << targetSquare;
 
-                if (PieceUtil.getPieceType(manager.board[targetSquare]) == PieceUtil.TYPE_KING && PieceUtil.getPieceColor(manager.board[targetSquare]) == player.color) {
+                if (targetSquare == player.kingSquare) {
                     if (isChecked) isDoubleChecked = true;
                     else isChecked = true;
-                    checkMask |= (1L << pieceSquare);
+                    checkMask |= 1L << pieceSquare;
                 }
             }
         }
@@ -159,25 +126,21 @@ public class MoveGenerator {
             if (file > 0) {
                 int targetSquare = opponent.color == Player.WHITE ? pieceSquare + 7 : pieceSquare - 9;
                 attackMask |= 1L << targetSquare;
-                if (targetSquare == 66) {
-                    BoardUtil.displayBoard(manager.board);
-                    System.out.println("WTF");
-                }
 
-                if (PieceUtil.getPieceType(manager.board[targetSquare]) == PieceUtil.TYPE_KING && PieceUtil.getPieceColor(manager.board[targetSquare]) == player.color) {
+                if (targetSquare == player.kingSquare) {
                     if (isChecked) isDoubleChecked = true;
                     else isChecked = true;
-                    checkMask |= (1L << pieceSquare);
+                    checkMask |= 1L << pieceSquare;
                 }
             }
             if (file < 7) {
                 int targetSquare = opponent.color == Player.WHITE ? pieceSquare + 9 : pieceSquare - 7;
                 attackMask |= 1L << targetSquare;
 
-                if (PieceUtil.getPieceType(manager.board[targetSquare]) == PieceUtil.TYPE_KING && PieceUtil.getPieceColor(manager.board[targetSquare]) == player.color) {
+                if (targetSquare == player.kingSquare) {
                     if (isChecked) isDoubleChecked = true;
                     else isChecked = true;
-                    checkMask |= (1L << pieceSquare);
+                    checkMask |= 1L << pieceSquare;
                 }
             }
         }
@@ -195,16 +158,51 @@ public class MoveGenerator {
         return ((1L << square) & checkMask) != 0;
     }
 
-    private ArrayList<Move> getSlidingMoves(Pieces pieces, int dirStart, int dirEnd, boolean capturesOnly) {
-        ArrayList<Move> legalMoves = new ArrayList<>();
+    private void generateLegalMoves(boolean capturesOnly) {
+        legalMoves = new ArrayList<>();
+
+        // king moves
+        for (short targetSquare : BoardUtil.KING_MOVES[player.kingSquare]) {
+            if (isSquareSafe(targetSquare)) {
+                short targetPiece = PieceUtil.getPieceType(manager.board[targetSquare]);
+                if (targetPiece == PieceUtil.TYPE_NONE && (isChecked || !capturesOnly)) {
+                    legalMoves.add(new Move(player.kingSquare, targetSquare, Move.MOVE_DEFAULT, 0));
+                } else if (targetPiece != PieceUtil.TYPE_NONE && PieceUtil.getPieceColor(manager.board[targetSquare]) == opponent.color) {
+                    legalMoves.add(new Move(player.kingSquare, targetSquare, Move.MOVE_DEFAULT, PieceUtil.getPieceValue(targetPiece)));
+                }
+            }
+        }
+        if (isDoubleChecked) return;
+
+        boolean canCastleKingSide = (player.color == Player.WHITE ? (manager.castleRights & BoardUtil.WHITE_KSC_MASK) : (manager.castleRights & BoardUtil.BLACK_KSC_MASK)) != 0;
+        boolean canCastleQueenSide = (player.color == Player.WHITE ? (manager.castleRights & BoardUtil.WHITE_QSC_MASK) : (manager.castleRights & BoardUtil.BLACK_QSC_MASK)) != 0;
+
+        // Castling moves
+        if (!isChecked && canCastleKingSide && manager.board[player.kingSquare + 1] == PieceUtil.TYPE_NONE && isSquareSafe((short)(player.kingSquare + 1)) && manager.board[player.kingSquare + 2] == PieceUtil.TYPE_NONE && isSquareSafe((short)(player.kingSquare + 2))) {
+            legalMoves.add(new Move(player.kingSquare, (short)(player.kingSquare + 2), Move.MOVE_CKS, 2000));
+        }
+        if (!isChecked && canCastleQueenSide && manager.board[player.kingSquare - 1] == PieceUtil.TYPE_NONE && isSquareSafe((short)(player.kingSquare - 1)) && manager.board[player.kingSquare - 2] == PieceUtil.TYPE_NONE && isSquareSafe((short)(player.kingSquare - 2)) && manager.board[player.kingSquare - 3] == PieceUtil.TYPE_NONE) {
+            legalMoves.add(new Move(player.kingSquare, (short)(player.kingSquare - 2), Move.MOVE_CQS, 2000));
+        }
+
+        generateSlidingMoves(player.queens, 0, 7, capturesOnly);
+        generateSlidingMoves(player.rooks, 0, 3, capturesOnly);
+        generateSlidingMoves(player.bishops, 4, 7, capturesOnly);
+        generateKnightMoves(player.knights, capturesOnly);
+        generatePawnMoves(player.pawns, capturesOnly);
+    }
+
+    private void generateSlidingMoves(Pieces pieces, int dirStart, int dirEnd, boolean capturesOnly) {
         for (int i = 0; i < pieces.currentCnt; i++) {
             short pieceSquare = pieces.positions[i];
+
             for (int dir = dirStart; dir <= dirEnd; dir++) {
                 short maxMoves = BoardUtil.moveCnt[pieceSquare][dir];
-                if (maxMoves > 0 && isSquarePinned(pieceSquare) && (player.kingSquare == pieceSquare + BoardUtil.moveOffsets[dir]
-                        || !BoardUtil.isMovingOnThePinLine(player.kingSquare, pieceSquare, pieceSquare + BoardUtil.moveOffsets[dir]))) {
+                if (maxMoves > 0 && isSquarePinned(pieceSquare) && !BoardUtil.isMovingOnThePinLine(player.kingSquare, pieceSquare, pieceSquare + BoardUtil.moveOffsets[dir])) {
+                    // this was removed (player.kingSquare == pieceSquare + BoardUtil.moveOffsets[dir]
+                    //                        || !BoardUtil.isMovingOnThePinLine(player.kingSquare, pieceSquare, pieceSquare + BoardUtil.moveOffsets[dir])
                     // the pinned piece must move in the direction of the pin
-                    break;
+                    continue;
                 }
 
                 short currentMoves = 0;
@@ -212,6 +210,7 @@ public class MoveGenerator {
                     short targetSquare = (short)(pieceSquare + BoardUtil.moveOffsets[dir] * currentMoves);
                     short targetPiece = PieceUtil.getPieceType(manager.board[targetSquare]);
                     short targetPieceColor = PieceUtil.getPieceColor(manager.board[targetSquare]);
+
                     if (isChecked && !isBlockingCheck(targetSquare)) {
                         if (targetPiece != PieceUtil.TYPE_NONE) break;
                         else continue;
@@ -223,17 +222,15 @@ public class MoveGenerator {
                             legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, gain));
                         }
                         break;
-                    } else if (!capturesOnly) {
+                    } else if (isChecked || !capturesOnly) {
                         legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, 0));
                     }
                 }
             }
         }
-        return legalMoves;
     }
 
-    private ArrayList<Move> getKnightMoves(Pieces pieces, boolean capturesOnly) {
-        ArrayList<Move> legalMoves = new ArrayList<>();
+    private void generateKnightMoves(Pieces pieces, boolean capturesOnly) {
         for (int i = 0; i < pieces.currentCnt; i++) {
             short pieceSquare = pieces.positions[i];
             if (isSquarePinned(pieceSquare)) {
@@ -247,7 +244,7 @@ public class MoveGenerator {
                 }
 
                 short targetPiece = PieceUtil.getPieceType(manager.board[targetSquare]);
-                if (targetPiece == PieceUtil.TYPE_NONE && !capturesOnly) {
+                if (targetPiece == PieceUtil.TYPE_NONE && (isChecked || !capturesOnly)) {
                     legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, 0));
                 } else if (targetPiece != PieceUtil.TYPE_NONE && PieceUtil.getPieceColor(manager.board[targetSquare]) == opponent.color) {
                     int gain = PieceUtil.getPieceValue(targetPiece) - PieceUtil.KNIGHT_VALUE / 10;
@@ -255,11 +252,9 @@ public class MoveGenerator {
                 }
             }
         }
-        return legalMoves;
     }
 
-    private ArrayList<Move> getPawnMoves(Pieces pieces, boolean capturesOnly) {
-        ArrayList<Move> legalMoves = new ArrayList<>();
+    private void generatePawnMoves(Pieces pieces, boolean capturesOnly) {
         for (int i = 0; i < pieces.currentCnt; i++) {
             short pieceSquare = pieces.positions[i];
             short rank = (short)(pieceSquare / 8);
@@ -281,10 +276,9 @@ public class MoveGenerator {
                 twoSquaresAheadRank = 6;
             }
 
-            short targetSquare;
             // move ahead
-            if (manager.board[pieceSquare + straightOffset] == PieceUtil.TYPE_NONE && !capturesOnly && (!isPawnPinned || BoardUtil.isMovingOnThePinLine(player.kingSquare, pieceSquare, pieceSquare + straightOffset))) {
-                targetSquare = (short)(pieceSquare + straightOffset);
+            short targetSquare = (short)(pieceSquare + straightOffset);
+            if (manager.board[targetSquare] == PieceUtil.TYPE_NONE && (isChecked || !capturesOnly) && (!isPawnPinned || BoardUtil.isMovingOnThePinLine(player.kingSquare, pieceSquare, targetSquare))) {
                 if (!isChecked || isBlockingCheck(targetSquare)) {
                     if (rank == promotionRank) {
                         // promotion moves
@@ -339,22 +333,18 @@ public class MoveGenerator {
 
             // capture en passant
             if (file > 0 && manager.epSquare == pieceSquare + leftOffset) {
-                Move epMove = getEpMove(rank, file, pieceSquare, leftOffset, straightOffset, isPawnPinned);
-                if (epMove != null) legalMoves.add(epMove);
+                generateEPMove(rank, file, pieceSquare, leftOffset, straightOffset, isPawnPinned);
             } else if (file < 7 && manager.epSquare == pieceSquare + rightOffset) {
-                Move epMove = getEpMove(rank, file, pieceSquare, rightOffset, straightOffset, isPawnPinned);
-                if (epMove != null) legalMoves.add(epMove);
+                generateEPMove(rank, file, pieceSquare, rightOffset, straightOffset, isPawnPinned);
             }
         }
-        return legalMoves;
     }
 
-    private Move getEpMove(short rank, short file, short pieceSquare, short dirOffset, short straightOffset, boolean isPawnPinned) {
+    private void generateEPMove(short rank, short file, short pieceSquare, short dirOffset, short straightOffset, boolean isPawnPinned) {
         short kingRank = (short)(player.kingSquare / 8);
         short kingFile = (short)(player.kingSquare % 8);
-        boolean canCapture = true;
 
-        if (isPawnPinned) canCapture = BoardUtil.isMovingOnThePinLine(player.kingSquare, pieceSquare, (short)(pieceSquare + dirOffset));
+        boolean canCapture = !isPawnPinned || BoardUtil.isMovingOnThePinLine(player.kingSquare, pieceSquare, (short)(pieceSquare + dirOffset));
         canCapture = canCapture && (!isChecked || isBlockingCheck((short)(pieceSquare + dirOffset - straightOffset)));
 
         // check for sliding pieces on the left and right
@@ -368,38 +358,58 @@ public class MoveGenerator {
                 delta = -1;
             }
 
-            boolean otherPieceFound = false;
-            boolean playerPawnFound = false;
-            boolean enemyPawnFound = false;
+            short piecesFound = 0;
             boolean slidingPieceFound = false;
 
-            while (fileItr >= 0 && fileItr < 8 && !otherPieceFound && !slidingPieceFound) {
+            while (fileItr >= 0 && fileItr < 8 && piecesFound < 3 && !slidingPieceFound) {
                 short targetSquare = BoardUtil.getSquare(rank, (short)fileItr);
+
                 if (manager.board[targetSquare] != PieceUtil.TYPE_NONE) {
                     short targetPiece = manager.board[targetSquare];
 
-                    if (PieceUtil.getPieceColor(manager.board[targetSquare]) == player.color) {
-                        if (PieceUtil.getPieceType(targetPiece) == PieceUtil.TYPE_PAWN) {
-                            if (playerPawnFound) otherPieceFound = true;
-                            else playerPawnFound = true;
-                        } else {
-                            otherPieceFound = true;
-                        }
+                    if (PieceUtil.getPieceColor(targetPiece) == opponent.color && PieceUtil.isQueenOrRook(targetPiece)) {
+                        slidingPieceFound = true;
                     } else {
-                        if (PieceUtil.isQueenOrRook(targetPiece)) {
-                            slidingPieceFound = true;
-                        } else if (PieceUtil.getPieceType(targetPiece) == PieceUtil.TYPE_PAWN) {
-                            if (enemyPawnFound) otherPieceFound = true;
-                            else enemyPawnFound = true;
-                        } else {
-                            otherPieceFound = true;
-                        }
+                        piecesFound++;
                     }
                 }
                 fileItr += delta;
             }
             canCapture = !slidingPieceFound;
         }
-        return canCapture ? new Move(pieceSquare, (short)(pieceSquare + dirOffset), Move.MOVE_EP, 90) : null;
+
+        // debugging
+        if (manager.checkEP && !canCapture) {
+            ArrayList<String> rows = new ArrayList<>();
+            for (short r=0; r<7; r++) {
+                HashMap<Character, Integer> map = new HashMap<>();
+                for (short f=0; f<7; f++) {
+                    char c = PieceUtil.getPieceChar(manager.board[BoardUtil.getSquare(r, f)]);
+                    if (c != '-') {
+                        map.put(c, map.getOrDefault(c, 0) + 1);
+                    }
+                }
+                StringBuilder sb = new StringBuilder();
+                for (var e : map.entrySet()) sb.append(e.getKey()).append(e.getValue());
+                rows.add(sb.toString());
+            }
+
+            boolean displayBoard = false;
+            for (String row : rows) {
+                if (row.length() > 10) {
+                    displayBoard = true;
+                    break;
+                }
+            }
+
+            if (displayBoard) {
+                System.out.println(pieceSquare + " -> " + (pieceSquare + dirOffset));
+                BoardUtil.displayBoard(manager.board);
+                System.out.println("############################");
+            }
+        }
+        if (canCapture) {
+            legalMoves.add(new Move(pieceSquare, (short)(pieceSquare + dirOffset), Move.MOVE_EP, 90));
+        }
     }
 }

@@ -4,6 +4,7 @@ import util.BoardUtil;
 import util.PieceUtil;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Stack;
 
@@ -14,9 +15,14 @@ public class Engine {
     private Move bestMove;
     private int currentMaxDepth;
     Stack<MoveInfo> previousMoves;
-    private int positionsReached;
-    private int enPassants;
-    private int captures;
+
+    // debugging variables
+    private long positionsReached;
+    private long enPassants;
+    private long captures;
+    private long promotions;
+    private long castles;
+    private int debugDepth;
 
     private final int MAX_EVAL = (int)1e7;
 
@@ -40,26 +46,29 @@ public class Engine {
     }
 
     public void test(int depth) {
-        positionsReached = enPassants = captures = 0;
+        positionsReached = enPassants = captures = promotions = castles = 0;
+        debugDepth = depth;
         findBestMove(depth, 0);
         System.out.println("At depth " + depth + ", number of positions reached : " + positionsReached);
-        System.out.println("En-passants : " + enPassants + ", Captures : " + captures);
+        System.out.println("En-passants : " + enPassants + ", Captures : " + captures + ", Promotions : " + promotions + ", Castles : " + castles);
     }
 
     public int findBestMove(int depth, int depthFromRoot) {
         if (depth == 0) {
             positionsReached++;
-//            BoardUtil.displayBoard(manager.board);
             return evaluator.evaluate();
         }
 
         // TODO: 50 move rule
         if (manager.halfMoveClock == 50) return 0;
 
+        if (depth == 1) manager.checkEP = true;
+        else manager.checkEP = false;
+
         ArrayList<Move> legaMoves = generator.getLegalMoves(false);
         // checkmate or stalemate
         if (legaMoves.isEmpty()) return generator.isChecked ? -(MAX_EVAL - depthFromRoot) : 0;
-        Collections.sort(legaMoves);
+//        Collections.sort(legaMoves);
 
         int currentBestEval = manager.whiteToMove ? Integer.MIN_VALUE : Integer.MAX_VALUE;
         for (Move move : legaMoves) {
@@ -81,15 +90,28 @@ public class Engine {
         return currentBestEval;
     }
 
-    public void makeMove(Move move, int movesPlayed) {
+    public void makeMove(Move move, int currentDepth) {
         MoveInfo moveInfo = new MoveInfo(manager.epSquare, manager.castleRights);
         manager.epSquare = -1;
 
         if (Move.isPromotionMove(move.moveType)) {
             short targetPiece = manager.board[move.targetSquare];
             if (targetPiece != PieceUtil.TYPE_NONE) {
+                moveInfo.piece = targetPiece;
                 manager.getOpponent().getPieces(targetPiece).removePiece(move.targetSquare);
-                captures++;
+                if (debugDepth == currentDepth) captures++;
+            }
+
+            if (manager.castleRights != 0) {
+                if (move.targetSquare == BoardUtil.WHITE_KS_ROOK) {
+                    manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.WHITE_KSC_MASK);
+                } else if (move.targetSquare == BoardUtil.WHITE_QS_ROOK) {
+                    manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.WHITE_QSC_MASK);
+                } else if (move.targetSquare == BoardUtil.BLACK_KS_ROOK) {
+                    manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.BLACK_KSC_MASK);
+                } else if (move.targetSquare == BoardUtil.BLACK_QS_ROOK) {
+                    manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.BLACK_QSC_MASK);
+                }
             }
 
             short newPiece = (short)(PieceUtil.getPromotionPiece(move.moveType) | manager.getPlayer().color);
@@ -98,6 +120,7 @@ public class Engine {
 
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).removePiece(move.startSquare);
             manager.getPlayer().getPieces(newPiece).addPiece(move.targetSquare);
+            if (debugDepth == currentDepth) promotions++;
         } else if (Move.MOVE_CKS == move.moveType) {
             short kingSquare = manager.getPlayer().kingSquare;
             manager.board[kingSquare + 1] = manager.board[kingSquare + 3];
@@ -107,6 +130,7 @@ public class Engine {
             manager.removePlayerCastleRights();
             manager.getPlayer().kingSquare = move.targetSquare;
             manager.getPlayer().getPieces(PieceUtil.TYPE_ROOK).updatePosition((short)(move.targetSquare + 1), (short)(move.targetSquare - 1));
+            if (debugDepth == currentDepth) castles++;
         } else if (Move.MOVE_CQS == move.moveType) {
             short kingSquare = manager.getPlayer().kingSquare;
             manager.board[kingSquare - 1] = manager.board[kingSquare - 4];
@@ -116,6 +140,7 @@ public class Engine {
             manager.removePlayerCastleRights();
             manager.getPlayer().kingSquare = move.targetSquare;
             manager.getPlayer().getPieces(PieceUtil.TYPE_ROOK).updatePosition((short)(move.targetSquare - 2), (short)(move.targetSquare + 1));
+            if (debugDepth == currentDepth) castles++;
         } else if (Move.MOVE_2_SQUARES == move.moveType) {
             manager.board[move.targetSquare] = manager.board[move.startSquare];
             manager.board[move.startSquare] = PieceUtil.TYPE_NONE;
@@ -130,40 +155,57 @@ public class Engine {
 
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.startSquare, move.targetSquare);
             manager.getOpponent().getPieces(PieceUtil.TYPE_PAWN).removePiece((short)(move.targetSquare + (manager.whiteToMove ? -8 : 8)));
-            enPassants++;
+            if (debugDepth == currentDepth) {
+                enPassants++;
+                captures++;
+            }
         } else {
             short targetPiece = manager.board[move.targetSquare];
             if (targetPiece != PieceUtil.TYPE_NONE) {
                 moveInfo.piece = targetPiece;
                 manager.getOpponent().getPieces(targetPiece).removePiece(move.targetSquare);
-                captures++;
+
+                if (manager.castleRights != 0 && PieceUtil.TYPE_ROOK == PieceUtil.getPieceType(targetPiece)) {
+                    if (move.targetSquare == BoardUtil.WHITE_KS_ROOK) {
+                        manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.WHITE_KSC_MASK);
+                    } else if (move.targetSquare == BoardUtil.WHITE_QS_ROOK) {
+                        manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.WHITE_QSC_MASK);
+                    } else if (move.targetSquare == BoardUtil.BLACK_KS_ROOK) {
+                        manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.BLACK_KSC_MASK);
+                    } else if (move.targetSquare == BoardUtil.BLACK_QS_ROOK) {
+                        manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.BLACK_QSC_MASK);
+                    }
+                }
+                if (debugDepth == currentDepth) captures++;
             }
 
-            manager.board[move.targetSquare] = manager.board[move.startSquare];
-            manager.board[move.startSquare] = PieceUtil.TYPE_NONE;
-
             if (move.startSquare != manager.getPlayer().kingSquare) {
-                manager.getPlayer().getPieces(manager.board[move.targetSquare]).updatePosition(move.startSquare, move.targetSquare);
-
-                if (PieceUtil.getPieceType(manager.board[move.targetSquare]) == PieceUtil.TYPE_ROOK) {
-                    if (manager.whiteToMove) {
-                        if (move.startSquare == BoardUtil.WHITE_KS_ROOK) {
-                            manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.WHITE_KSC_MASK);
-                        } else if (move.startSquare == BoardUtil.WHITE_QS_ROOK) {
-                            manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.WHITE_QSC_MASK);
-                        }
-                    } else {
-                        if (move.startSquare == BoardUtil.BLACK_KS_ROOK) {
-                            manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.BLACK_KSC_MASK);
-                        } else if (move.startSquare == BoardUtil.BLACK_QS_ROOK) {
-                            manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.BLACK_QSC_MASK);
+                if (manager.castleRights != 0) {
+                    if (PieceUtil.getPieceType(manager.board[move.startSquare]) == PieceUtil.TYPE_ROOK) {
+                        if (manager.whiteToMove) {
+                            if (move.startSquare == BoardUtil.WHITE_KS_ROOK) {
+                                manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.WHITE_KSC_MASK);
+                            } else if (move.startSquare == BoardUtil.WHITE_QS_ROOK) {
+                                manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.WHITE_QSC_MASK);
+                            }
+                        } else {
+                            if (move.startSquare == BoardUtil.BLACK_KS_ROOK) {
+                                manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.BLACK_KSC_MASK);
+                            } else if (move.startSquare == BoardUtil.BLACK_QS_ROOK) {
+                                manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.BLACK_QSC_MASK);
+                            }
                         }
                     }
                 }
+
+                manager.getPlayer().getPieces(manager.board[move.startSquare]).updatePosition(move.startSquare, move.targetSquare);
             } else {
                 manager.removePlayerCastleRights();
                 manager.getPlayer().kingSquare = move.targetSquare;
             }
+
+            manager.board[move.targetSquare] = manager.board[move.startSquare];
+            manager.board[move.startSquare] = PieceUtil.TYPE_NONE;
         }
 
         manager.whiteToMove = !manager.whiteToMove;

@@ -158,7 +158,7 @@ public class BoardUtil {
                 short square = getSquare(rank, file);
                 long squareMask = 1L << square;
                 char c = (attackMask & squareMask) != 0 ? '#' : '.';
-                System.out.printf("%2c ", c);
+                System.out.printf("%3c ", c);
             }
             System.out.println();
         }

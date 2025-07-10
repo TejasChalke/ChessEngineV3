@@ -34,4 +34,10 @@ public class Pieces {
         positions[positionIndex] = targetSquare;
         localBoard[targetSquare] = positionIndex;
     }
+
+    public void display() {
+        System.out.print("[");
+        for (int i=0; i<currentCnt; i++) System.out.print(positions[i] + (i < currentCnt - 1 ? ", " : "]"));
+        System.out.println();
+    }
 }
