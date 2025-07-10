@@ -4,7 +4,6 @@ import util.BoardUtil;
 import util.PieceUtil;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 
 public class MoveGenerator {
     private final Manager manager;
@@ -42,7 +41,7 @@ public class MoveGenerator {
 
         // king attack mask
         for (short targetSquare : BoardUtil.KING_MOVES[opponent.kingSquare]) {
-            attackMask |= 1L << targetSquare;
+            attackMask |= BoardUtil.squareMask[targetSquare];
         }
     }
 
@@ -61,7 +60,7 @@ public class MoveGenerator {
                 while (currentMoves++ < maxMoves) {
                     short targetSquare = (short)(pieceSquare + BoardUtil.moveOffsets[dir] * currentMoves);
                     short targetPiece = PieceUtil.getPieceType(manager.board[targetSquare]);
-                    long squareMask = 1L << targetSquare;
+                    long squareMask = BoardUtil.squareMask[targetSquare];
 
                     if (!otherPieceFound) {
                         currentAttackMask |= squareMask;
@@ -75,11 +74,11 @@ public class MoveGenerator {
                             if (!otherPieceFound) {
                                 if (isChecked) isDoubleChecked = true;
                                 else isChecked = true;
-                                checkMask |= (currentAttackMask | (1L << pieceSquare));
+                                checkMask |= (currentAttackMask | BoardUtil.squareMask[pieceSquare]);
 
                                 if (currentMoves < maxMoves) {
                                     targetSquare += BoardUtil.moveOffsets[dir];
-                                    currentAttackMask |= 1L << targetSquare;
+                                    currentAttackMask |= BoardUtil.squareMask[targetSquare];
                                 }
                             } else {
                                 pinMask |= currentPinMask;
@@ -107,12 +106,12 @@ public class MoveGenerator {
             short pieceSquare = pieces.positions[i];
 
             for (short targetSquare : BoardUtil.KNIGHT_MOVES[pieceSquare]) {
-                attackMask |= 1L << targetSquare;
+                attackMask |= BoardUtil.squareMask[targetSquare];
 
                 if (targetSquare == player.kingSquare) {
                     if (isChecked) isDoubleChecked = true;
                     else isChecked = true;
-                    checkMask |= 1L << pieceSquare;
+                    checkMask |= BoardUtil.squareMask[pieceSquare];
                 }
             }
         }
@@ -125,37 +124,37 @@ public class MoveGenerator {
 
             if (file > 0) {
                 int targetSquare = opponent.color == Player.WHITE ? pieceSquare + 7 : pieceSquare - 9;
-                attackMask |= 1L << targetSquare;
+                attackMask |= BoardUtil.squareMask[targetSquare];
 
                 if (targetSquare == player.kingSquare) {
                     if (isChecked) isDoubleChecked = true;
                     else isChecked = true;
-                    checkMask |= 1L << pieceSquare;
+                    checkMask |= BoardUtil.squareMask[pieceSquare];
                 }
             }
             if (file < 7) {
                 int targetSquare = opponent.color == Player.WHITE ? pieceSquare + 9 : pieceSquare - 7;
-                attackMask |= 1L << targetSquare;
+                attackMask |= BoardUtil.squareMask[targetSquare];
 
                 if (targetSquare == player.kingSquare) {
                     if (isChecked) isDoubleChecked = true;
                     else isChecked = true;
-                    checkMask |= 1L << pieceSquare;
+                    checkMask |= BoardUtil.squareMask[pieceSquare];
                 }
             }
         }
     }
 
     private boolean isSquareSafe(short square) {
-        return ((1L << square) & attackMask) == 0;
+        return (BoardUtil.squareMask[square] & attackMask) == 0;
     }
 
     private boolean isSquarePinned(short square) {
-        return ((1L << square) & pinMask) != 0;
+        return (BoardUtil.squareMask[square] & pinMask) != 0;
     }
 
     private boolean isBlockingCheck(short square) {
-        return ((1L << square) & checkMask) != 0;
+        return (BoardUtil.squareMask[square] & checkMask) != 0;
     }
 
     private void generateLegalMoves(boolean capturesOnly) {
@@ -199,8 +198,6 @@ public class MoveGenerator {
             for (int dir = dirStart; dir <= dirEnd; dir++) {
                 short maxMoves = BoardUtil.moveCnt[pieceSquare][dir];
                 if (maxMoves > 0 && isSquarePinned(pieceSquare) && !BoardUtil.isMovingOnThePinLine(player.kingSquare, pieceSquare, pieceSquare + BoardUtil.moveOffsets[dir])) {
-                    // this was removed (player.kingSquare == pieceSquare + BoardUtil.moveOffsets[dir]
-                    //                        || !BoardUtil.isMovingOnThePinLine(player.kingSquare, pieceSquare, pieceSquare + BoardUtil.moveOffsets[dir])
                     // the pinned piece must move in the direction of the pin
                     continue;
                 }
@@ -349,65 +346,49 @@ public class MoveGenerator {
 
         // check for sliding pieces on the left and right
         if (canCapture && kingRank == rank) {
-            int fileItr = 0, delta = 0;
+            short fileItr = 0, delta = 0;
             if (kingFile < file) {
-                fileItr = kingFile + 1;
+                fileItr = (short)(kingFile + 1);
                 delta = 1;
             } else {
-                fileItr = kingFile - 1;
+                fileItr = (short)(kingFile - 1);
                 delta = -1;
             }
 
-            short piecesFound = 0;
-            boolean slidingPieceFound = false;
+            boolean playerPawnFound = false;
+            boolean enemyPawnFound = false;
+            boolean otherPieceFound = false;
+            short slidingPieceFile = -1;
 
-            while (fileItr >= 0 && fileItr < 8 && piecesFound < 3 && !slidingPieceFound) {
-                short targetSquare = BoardUtil.getSquare(rank, (short)fileItr);
+            while (fileItr >= 0 && fileItr < 8 && !otherPieceFound && slidingPieceFile == -1) {
+                short targetSquare = BoardUtil.getSquare(rank, fileItr);
 
                 if (manager.board[targetSquare] != PieceUtil.TYPE_NONE) {
                     short targetPiece = manager.board[targetSquare];
 
-                    if (PieceUtil.getPieceColor(targetPiece) == opponent.color && PieceUtil.isQueenOrRook(targetPiece)) {
-                        slidingPieceFound = true;
+                    if (PieceUtil.getPieceColor(targetPiece) == player.color) {
+                        if (PieceUtil.getPieceType(targetPiece) == PieceUtil.TYPE_PAWN) {
+                            if (playerPawnFound) otherPieceFound = true;
+                            else playerPawnFound = true;
+                        } else {
+                            otherPieceFound = true;
+                        }
                     } else {
-                        piecesFound++;
+                        if (PieceUtil.isQueenOrRook(targetPiece)) {
+                            slidingPieceFile = fileItr;
+                        } else if (PieceUtil.getPieceType(targetPiece) == PieceUtil.TYPE_PAWN) {
+                            if (enemyPawnFound) otherPieceFound = true;
+                            else enemyPawnFound = true;
+                        } else {
+                            otherPieceFound = true;
+                        }
                     }
                 }
                 fileItr += delta;
             }
-            canCapture = !slidingPieceFound;
+            canCapture = slidingPieceFile == -1 || (file < slidingPieceFile && slidingPieceFile < kingFile) || (kingFile < slidingPieceFile && slidingPieceFile < file);
         }
 
-        // debugging
-        if (manager.checkEP && !canCapture) {
-            ArrayList<String> rows = new ArrayList<>();
-            for (short r=0; r<7; r++) {
-                HashMap<Character, Integer> map = new HashMap<>();
-                for (short f=0; f<7; f++) {
-                    char c = PieceUtil.getPieceChar(manager.board[BoardUtil.getSquare(r, f)]);
-                    if (c != '-') {
-                        map.put(c, map.getOrDefault(c, 0) + 1);
-                    }
-                }
-                StringBuilder sb = new StringBuilder();
-                for (var e : map.entrySet()) sb.append(e.getKey()).append(e.getValue());
-                rows.add(sb.toString());
-            }
-
-            boolean displayBoard = false;
-            for (String row : rows) {
-                if (row.length() > 10) {
-                    displayBoard = true;
-                    break;
-                }
-            }
-
-            if (displayBoard) {
-                System.out.println(pieceSquare + " -> " + (pieceSquare + dirOffset));
-                BoardUtil.displayBoard(manager.board);
-                System.out.println("############################");
-            }
-        }
         if (canCapture) {
             legalMoves.add(new Move(pieceSquare, (short)(pieceSquare + dirOffset), Move.MOVE_EP, 90));
         }

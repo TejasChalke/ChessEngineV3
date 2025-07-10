@@ -31,9 +31,4 @@ public class Move implements Comparable<Move> {
     public static boolean isPromotionMove(short move) {
         return move == MOVE_P_BISHOP || move == MOVE_P_KNIGHT || move == MOVE_P_ROOK || move == MOVE_P_QUEEN;
     }
-
-    @Override
-    public String toString() {
-        return "[" + startSquare + " -> " + targetSquare + " : " + moveType + "]";
-    }
 }

@@ -16,14 +16,6 @@ public class Engine {
     private int currentMaxDepth;
     Stack<MoveInfo> previousMoves;
 
-    // debugging variables
-    private long positionsReached;
-    private long enPassants;
-    private long captures;
-    private long promotions;
-    private long castles;
-    private int debugDepth;
-
     private final int MAX_EVAL = (int)1e7;
 
     public Engine(Manager manager) {
@@ -37,7 +29,7 @@ public class Engine {
 
     public Move getBestMove() {
         // TODO: implement iterative deepening
-        int eval = findBestMove(4, 0);
+        long eval = findBestMove(4, 0);
         if (bestMove == null) {
             if (!generator.isChecked) bestMove = new Move((short)-3, (short)0, (short)0, 0);
             else bestMove = new Move((short)(manager.whiteToMove ? -2 : -1), (short)0, (short)0, 0);
@@ -45,34 +37,42 @@ public class Engine {
         return bestMove;
     }
 
-    public void test(int depth) {
-        positionsReached = enPassants = captures = promotions = castles = 0;
-        debugDepth = depth;
-        findBestMove(depth, 0);
-        System.out.println("At depth " + depth + ", number of positions reached : " + positionsReached);
-        System.out.println("En-passants : " + enPassants + ", Captures : " + captures + ", Promotions : " + promotions + ", Castles : " + castles);
+    public long test(int depth) {
+        return getNodeCount(depth);
+    }
+
+    private long getNodeCount(int depth) {
+        if (depth == 0) {
+            return 1;
+        }
+        ArrayList<Move> legaMoves = generator.getLegalMoves(false);
+        long moves = 0;
+        for (Move move : legaMoves) {
+            makeMove(move);
+            long currentMoves = getNodeCount(depth - 1);
+            moves += currentMoves;
+            unMakeMove(move);
+        }
+        return moves;
     }
 
     public int findBestMove(int depth, int depthFromRoot) {
         if (depth == 0) {
-            positionsReached++;
             return evaluator.evaluate();
         }
 
         // TODO: 50 move rule
         if (manager.halfMoveClock == 50) return 0;
 
-        if (depth == 1) manager.checkEP = true;
-        else manager.checkEP = false;
-
         ArrayList<Move> legaMoves = generator.getLegalMoves(false);
+
         // checkmate or stalemate
         if (legaMoves.isEmpty()) return generator.isChecked ? -(MAX_EVAL - depthFromRoot) : 0;
-//        Collections.sort(legaMoves);
+        Collections.sort(legaMoves);
 
         int currentBestEval = manager.whiteToMove ? Integer.MIN_VALUE : Integer.MAX_VALUE;
         for (Move move : legaMoves) {
-            makeMove(move, depthFromRoot + 1);
+            makeMove(move);
             int currentEval = findBestMove(depth - 1, depthFromRoot + 1);
             if (manager.whiteToMove && currentEval > currentBestEval) {
                 currentBestEval = currentEval;
@@ -90,7 +90,7 @@ public class Engine {
         return currentBestEval;
     }
 
-    public void makeMove(Move move, int currentDepth) {
+    public void makeMove(Move move) {
         MoveInfo moveInfo = new MoveInfo(manager.epSquare, manager.castleRights);
         manager.epSquare = -1;
 
@@ -99,7 +99,6 @@ public class Engine {
             if (targetPiece != PieceUtil.TYPE_NONE) {
                 moveInfo.piece = targetPiece;
                 manager.getOpponent().getPieces(targetPiece).removePiece(move.targetSquare);
-                if (debugDepth == currentDepth) captures++;
             }
 
             if (manager.castleRights != 0) {
@@ -120,7 +119,6 @@ public class Engine {
 
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).removePiece(move.startSquare);
             manager.getPlayer().getPieces(newPiece).addPiece(move.targetSquare);
-            if (debugDepth == currentDepth) promotions++;
         } else if (Move.MOVE_CKS == move.moveType) {
             short kingSquare = manager.getPlayer().kingSquare;
             manager.board[kingSquare + 1] = manager.board[kingSquare + 3];
@@ -130,7 +128,6 @@ public class Engine {
             manager.removePlayerCastleRights();
             manager.getPlayer().kingSquare = move.targetSquare;
             manager.getPlayer().getPieces(PieceUtil.TYPE_ROOK).updatePosition((short)(move.targetSquare + 1), (short)(move.targetSquare - 1));
-            if (debugDepth == currentDepth) castles++;
         } else if (Move.MOVE_CQS == move.moveType) {
             short kingSquare = manager.getPlayer().kingSquare;
             manager.board[kingSquare - 1] = manager.board[kingSquare - 4];
@@ -140,7 +137,6 @@ public class Engine {
             manager.removePlayerCastleRights();
             manager.getPlayer().kingSquare = move.targetSquare;
             manager.getPlayer().getPieces(PieceUtil.TYPE_ROOK).updatePosition((short)(move.targetSquare - 2), (short)(move.targetSquare + 1));
-            if (debugDepth == currentDepth) castles++;
         } else if (Move.MOVE_2_SQUARES == move.moveType) {
             manager.board[move.targetSquare] = manager.board[move.startSquare];
             manager.board[move.startSquare] = PieceUtil.TYPE_NONE;
@@ -155,10 +151,6 @@ public class Engine {
 
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.startSquare, move.targetSquare);
             manager.getOpponent().getPieces(PieceUtil.TYPE_PAWN).removePiece((short)(move.targetSquare + (manager.whiteToMove ? -8 : 8)));
-            if (debugDepth == currentDepth) {
-                enPassants++;
-                captures++;
-            }
         } else {
             short targetPiece = manager.board[move.targetSquare];
             if (targetPiece != PieceUtil.TYPE_NONE) {
@@ -176,7 +168,6 @@ public class Engine {
                         manager.castleRights &= (short)(BoardUtil.CASTLE_MASK ^ BoardUtil.BLACK_QSC_MASK);
                     }
                 }
-                if (debugDepth == currentDepth) captures++;
             }
 
             if (move.startSquare != manager.getPlayer().kingSquare) {

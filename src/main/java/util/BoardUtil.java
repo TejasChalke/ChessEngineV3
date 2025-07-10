@@ -16,6 +16,7 @@ public class BoardUtil {
     public static final short BLACK_KS_ROOK = 63;
     public static final short BLACK_QS_ROOK = 56;
 
+    public static long[] squareMask;
     public static ArrayList<Short>[] KNIGHT_MOVES;
     public static ArrayList<Short>[] KING_MOVES;
 
@@ -29,10 +30,12 @@ public class BoardUtil {
         moveCnt = new short[64][];
         KNIGHT_MOVES = new ArrayList[64];
         KING_MOVES = new ArrayList[64];
+        squareMask = new long[64];
 
         for (short rank = 0; rank < 8; rank++) {
             for (short file = 0; file < 8; file++) {
                 short square = getSquare(rank, file);
+                squareMask[square] = 1L << square;
                 moveCnt[square] = new short[] {
                         (short)(7 - rank),
                         rank,
@@ -93,6 +96,12 @@ public class BoardUtil {
         return (short)(rank * 8 + file);
     }
 
+    public static String getStandardNotation(short square) {
+        char file = (char)('a' + (square % 8));
+        char rank = (char)('1' + (square / 8));
+        return "" + file + rank;
+    }
+
     public static boolean isMovingOnThePinLine(int k, int p, int t) {
         return collinearPoints[k][p][t];
     }
@@ -133,14 +142,6 @@ public class BoardUtil {
 
     public static void displayBoard(short[] board) {
         System.out.println("------------------------------");
-//        for (short rank = 7; rank >= 0; rank--) {
-//            for (short file = 0; file < 8; file++) {
-//                char c = PieceUtil.getPieceChar(board[getSquare(rank, file)]);
-//                System.out.printf("%3s ", c == '-' ? getSquare(rank, file) + "" : '-');
-//            }
-//            System.out.println();
-//        }
-//        System.out.println("------------------------------");
         for (short rank = 7; rank >= 0; rank--) {
             for (short file = 0; file < 8; file++) {
                 char c = PieceUtil.getPieceChar(board[getSquare(rank, file)]);

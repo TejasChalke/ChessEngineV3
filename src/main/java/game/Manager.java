@@ -14,9 +14,6 @@ public class Manager {
     public int fullMoveCnt;
     public Engine engine;
 
-    // debug variables
-    public boolean checkEP = false;
-
     public Manager() {
         this("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     }
@@ -109,11 +106,11 @@ public class Manager {
     }
 
     public void playMove(Move move) {
-        engine.makeMove(move, 0);
+        engine.makeMove(move);
         engine.previousMoves.clear();
     }
 
-    public void test(int depth) {
-        engine.test(depth);
+    public long test(int depth) {
+        return engine.test(depth);
     }
 }
