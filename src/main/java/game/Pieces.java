@@ -1,36 +1,36 @@
 package game;
 
 public class Pieces {
-    public short currentCnt;
-    public short[] positions;
-    public short[] localBoard;
+    public byte currentCnt;
+    public byte[] positions;
+    public byte[] localBoard;
 
     public Pieces(int count) {
         currentCnt = 0;
-        positions = new short[count];
-        localBoard = new short[64];
+        positions = new byte[count];
+        localBoard = new byte[64];
     }
 
-    public void addPiece(short square) {
+    public void addPiece(byte square) {
         positions[currentCnt] = square;
         localBoard[square] = currentCnt++;
     }
 
-    public void removePiece(short square) {
+    public void removePiece(byte square) {
         currentCnt--;
         if (currentCnt == 0) {
             return;
         }
 
-        short positionIndex = localBoard[square];
-        short squareToUpdate = positions[currentCnt];
+        byte positionIndex = localBoard[square];
+        byte squareToUpdate = positions[currentCnt];
 
         localBoard[squareToUpdate] = positionIndex;
         positions[positionIndex] = squareToUpdate;
     }
 
-    public void updatePosition(short startSquare, short targetSquare) {
-        short positionIndex = localBoard[startSquare];
+    public void updatePosition(byte startSquare, byte targetSquare) {
+        byte positionIndex = localBoard[startSquare];
         positions[positionIndex] = targetSquare;
         localBoard[targetSquare] = positionIndex;
     }

@@ -1,0 +1,5 @@
+Install stockfish locally
+Run "position fen <fen string>"
+Run "d" to check the board
+Run "go perft <depth>" to check the number of moves
+Compare with generated moves

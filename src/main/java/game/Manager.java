@@ -1,16 +1,19 @@
 package game;
 
 import util.BoardUtil;
+import util.EvaluationUtil;
 import util.PieceUtil;
 
+import java.util.ArrayList;
+
 public class Manager {
-    public short[] board;
+    public byte[] board;
     public Player white;
     public Player black;
     public boolean whiteToMove;
-    public short castleRights;
-    public short epSquare;
-    public short halfMoveClock;
+    public byte castleRights;
+    public byte epSquare;
+    public byte halfMoveClock;
     public int fullMoveCnt;
     public Engine engine;
 
@@ -19,8 +22,8 @@ public class Manager {
     }
 
     public Manager(String fen) {
-        white = new Player("White", Player.WHITE);
-        black = new Player("Black", Player.BLACK);
+        white = new Player("White", Player.WHITE, EvaluationUtil.WHITE_INDEX);
+        black = new Player("Black", Player.BLACK, EvaluationUtil.BLACK_INDEX);
         try {
             setBoard(fen);
             engine = new Engine(this);
@@ -31,21 +34,21 @@ public class Manager {
     }
 
     private void setBoard(String fen) throws Exception {
-        board = new short[64];
+        board = new byte[64];
         String[] fenParts = fen.split(" ");
 
         if (fenParts.length > 0 && fenParts[0].contains("k") && fenParts[0].contains("K")) {
-            short rank = 7;
-            short file = 0;
+            byte rank = 7;
+            byte file = 0;
             for (char c : fenParts[0].toCharArray()) {
                 if (c >= '1' && c <= '8') {
-                    file += (short)(c - '0');
+                    file += (byte)(c - '0');
                 } else if (c == '/') {
                     rank--;
                     file = 0;
                 } else {
                     Player player = PieceUtil.isWhitePiece(c) ? white : black;
-                    short square = BoardUtil.getSquare(rank, file);
+                    byte square = BoardUtil.getSquare(rank, file);
 
                     if (c == 'k' || c == 'K') player.kingSquare = square;
                     else player.getPieces(c).addPiece(square);
@@ -72,8 +75,8 @@ public class Manager {
         }
 
         epSquare = fenParts.length > 3 ? BoardUtil.getSquare(fenParts[3]) : -1;
-        halfMoveClock = fenParts.length > 4 ? Short.parseShort(fenParts[4]) : 0;
-        fullMoveCnt = fenParts.length > 5 ? Short.parseShort(fenParts[5]) : 0;
+        halfMoveClock = fenParts.length > 4 ? Byte.parseByte(fenParts[4]) : 0;
+        fullMoveCnt = fenParts.length > 5 ? Byte.parseByte(fenParts[5]) : 0;
     }
 
     public Player getPlayer() {
@@ -90,19 +93,16 @@ public class Manager {
         }
     }
 
-    public boolean playBotMove() {
-        Move move = engine.getBestMove();
-        if (move.startSquare < 0) {
-            // game has ended
-            if (move.startSquare == -1) System.out.println("White won");
-            else if (move.startSquare == -2) System.out.println("Black won");
-            else System.out.println("Draw");
+    public ArrayList<Move> getLegalMoves() {
+        return engine.getLegalMoves();
+    }
 
-            return false;
-        } else {
+    public Move playBotMove() {
+        Move move = engine.getBestMove();
+        if (move.startSquare >= 0) {
             playMove(move);
-            return true;
         }
+        return move;
     }
 
     public void playMove(Move move) {

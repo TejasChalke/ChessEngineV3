@@ -3,48 +3,48 @@ package util;
 import java.util.ArrayList;
 
 public class BoardUtil {
-    public static short WHITE_KSC_MASK = 1;
-    public static short WHITE_QSC_MASK = 2;
-    public static short BLACK_KSC_MASK = 4;
-    public static short BLACK_QSC_MASK = 8;
-    public static short WHITE_CASTLE_RIGHTS = 3;
-    public static short BLACK_CASTLE_RIGHTS = 12;
-    public static short CASTLE_MASK = 15;
+    public static byte WHITE_KSC_MASK = 1;
+    public static byte WHITE_QSC_MASK = 2;
+    public static byte BLACK_KSC_MASK = 4;
+    public static byte BLACK_QSC_MASK = 8;
+    public static byte WHITE_CASTLE_RIGHTS = 3;
+    public static byte BLACK_CASTLE_RIGHTS = 12;
+    public static byte CASTLE_MASK = 15;
 
-    public static final short WHITE_KS_ROOK = 7;
-    public static final short WHITE_QS_ROOK = 0;
-    public static final short BLACK_KS_ROOK = 63;
-    public static final short BLACK_QS_ROOK = 56;
+    public static final byte WHITE_KS_ROOK = 7;
+    public static final byte WHITE_QS_ROOK = 0;
+    public static final byte BLACK_KS_ROOK = 63;
+    public static final byte BLACK_QS_ROOK = 56;
 
     public static long[] squareMask;
-    public static ArrayList<Short>[] KNIGHT_MOVES;
-    public static ArrayList<Short>[] KING_MOVES;
+    public static ArrayList<Byte>[] KNIGHT_MOVES;
+    public static ArrayList<Byte>[] KING_MOVES;
 
-    public static short[][] moveCnt;
-    public static short[] moveOffsets;
+    public static byte[][] moveCnt;
+    public static byte[] moveOffsets;
     public static boolean[][][] collinearPoints;
 
     static {
         // up, down, left, right, tr, tl, br, bl
-        moveOffsets = new short[] {8, -8, -1, 1, 9, 7, -7, -9};
-        moveCnt = new short[64][];
+        moveOffsets = new byte[] {8, -8, -1, 1, 9, 7, -7, -9};
+        moveCnt = new byte[64][];
         KNIGHT_MOVES = new ArrayList[64];
         KING_MOVES = new ArrayList[64];
         squareMask = new long[64];
 
-        for (short rank = 0; rank < 8; rank++) {
-            for (short file = 0; file < 8; file++) {
-                short square = getSquare(rank, file);
+        for (byte rank = 0; rank < 8; rank++) {
+            for (byte file = 0; file < 8; file++) {
+                byte square = getSquare(rank, file);
                 squareMask[square] = 1L << square;
-                moveCnt[square] = new short[] {
-                        (short)(7 - rank),
+                moveCnt[square] = new byte[] {
+                        (byte)(7 - rank),
                         rank,
                         file,
-                        (short)(7 - file),
-                        (short)Math.min(7 - rank, 7 - file),
-                        (short)Math.min(7 - rank, file),
-                        (short)Math.min(rank, 7 - file),
-                        (short)Math.min(rank, file)
+                        (byte)(7 - file),
+                        (byte)Math.min(7 - rank, 7 - file),
+                        (byte)Math.min(7 - rank, file),
+                        (byte)Math.min(rank, 7 - file),
+                        (byte)Math.min(rank, file)
                 };
                 KNIGHT_MOVES[square] = getKnightMoves(rank, file);
                 KING_MOVES[square] = new ArrayList<>();
@@ -73,30 +73,38 @@ public class BoardUtil {
         }
     }
 
-    private static ArrayList<Short> getKnightMoves(short rank, short file) {
-        ArrayList<Short> moves = new ArrayList<>();
-        final short[][] dir = new short[][] {{2, 1}, {2, -1}, {-2, 1}, {-2, -1}, {1, 2}, {1, -2}, {-1, 2}, {-1, -2}};
-        for (short[] d : dir) {
-            short r = (short)(rank + d[0]);
-            short f = (short)(file + d[1]);
+    private static ArrayList<Byte> getKnightMoves(byte rank, byte file) {
+        ArrayList<Byte> moves = new ArrayList<>();
+        final byte[][] dir = new byte[][] {{2, 1}, {2, -1}, {-2, 1}, {-2, -1}, {1, 2}, {1, -2}, {-1, 2}, {-1, -2}};
+        for (byte[] d : dir) {
+            byte r = (byte)(rank + d[0]);
+            byte f = (byte)(file + d[1]);
             if (r >= 0 && r < 8 && f >= 0 && f < 8)
                 moves.add(getSquare(r, f));
         }
         return moves;
     }
 
-    public static short getSquare(String notation) {
+    public static byte getRank(byte square) {
+        return (byte)(square / 8);
+    }
+
+    public static byte getFile(byte square) {
+        return (byte)(square % 8);
+    }
+
+    public static byte getSquare(String notation) {
         if (notation.equals("-")) return -1;
-        short rank = (short)(notation.charAt(1) - '1');
-        short file = (short)(notation.charAt(0) - 'a');
+        byte rank = (byte)(notation.charAt(1) - '1');
+        byte file = (byte)(notation.charAt(0) - 'a');
         return getSquare(rank, file);
     }
 
-    public static short getSquare(short rank, short file) {
-        return (short)(rank * 8 + file);
+    public static byte getSquare(byte rank, byte file) {
+        return (byte)(rank * 8 + file);
     }
 
-    public static String getStandardNotation(short square) {
+    public static String getStandardNotation(byte square) {
         char file = (char)('a' + (square % 8));
         char rank = (char)('1' + (square / 8));
         return "" + file + rank;
@@ -140,10 +148,10 @@ public class BoardUtil {
         return a == 0 ? 1 : a;
     }
 
-    public static void displayBoard(short[] board) {
+    public static void displayBoard(byte[] board) {
         System.out.println("------------------------------");
-        for (short rank = 7; rank >= 0; rank--) {
-            for (short file = 0; file < 8; file++) {
+        for (byte rank = 7; rank >= 0; rank--) {
+            for (byte file = 0; file < 8; file++) {
                 char c = PieceUtil.getPieceChar(board[getSquare(rank, file)]);
                 System.out.printf("%3s ", c);
             }
@@ -154,9 +162,9 @@ public class BoardUtil {
 
     public static void displayAttackMask(long attackMask) {
         System.out.println("------------------------------");
-        for (short rank = 7; rank >= 0; rank--) {
-            for (short file = 0; file < 8; file++) {
-                short square = getSquare(rank, file);
+        for (byte rank = 7; rank >= 0; rank--) {
+            for (byte file = 0; file < 8; file++) {
+                byte square = getSquare(rank, file);
                 long squareMask = 1L << square;
                 char c = (attackMask & squareMask) != 0 ? '#' : '.';
                 System.out.printf("%3c ", c);
