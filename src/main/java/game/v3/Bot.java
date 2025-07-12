@@ -1,4 +1,4 @@
-package game;
+package game.v3;
 
 import java.util.ArrayList;
 
@@ -8,6 +8,10 @@ public class Bot {
 
     public Bot() {
         resetBot();
+    }
+
+    public Bot(String fen) {
+        resetBot(fen);
     }
 
     public Move playBotMove() {
@@ -35,6 +39,11 @@ public class Bot {
 
     public void resetBot() {
         manager = new Manager();
+        isGameOver = false;
+    }
+
+    public void resetBot(String fen) {
+        manager = new Manager(fen);
         isGameOver = false;
     }
 

@@ -1,4 +1,4 @@
-package game;
+package game.v3;
 
 import util.BoardUtil;
 import util.PieceUtil;
@@ -16,23 +16,24 @@ public class MoveGenerator {
     public long attackMask;
     private long pinMask;
     private long checkMask;
+    private long pawnAttackMask;
 
     public MoveGenerator(Manager manager) {
         this.manager = manager;
     }
 
-    public ArrayList<Move> getLegalMoves(boolean capturesOnly) {
+    public ArrayList<Move> getLegalMoves(Move previousBestMove, boolean capturesOnly) {
         player = manager.getPlayer();
         opponent = manager.getOpponent();
 
         setAttackMask();
-        generateLegalMoves(capturesOnly);
+        generateLegalMoves(previousBestMove, capturesOnly);
         return legalMoves;
     }
 
     public void setAttackMask() {
         isChecked = isDoubleChecked = false;
-        attackMask = pinMask = checkMask = 0;
+        attackMask = pinMask = checkMask = pawnAttackMask = 0;
         setSlidingAttackMask(opponent.queens, 0, 7);
         setSlidingAttackMask(opponent.rooks, 0, 3);
         setSlidingAttackMask(opponent.bishops, 4, 7);
@@ -125,6 +126,7 @@ public class MoveGenerator {
             if (file > 0) {
                 int targetSquare = opponent.color == Player.WHITE ? pieceSquare + 7 : pieceSquare - 9;
                 attackMask |= BoardUtil.squareMask[targetSquare];
+                pawnAttackMask |= BoardUtil.squareMask[targetSquare];
 
                 if (targetSquare == player.kingSquare) {
                     if (isChecked) isDoubleChecked = true;
@@ -135,6 +137,7 @@ public class MoveGenerator {
             if (file < 7) {
                 int targetSquare = opponent.color == Player.WHITE ? pieceSquare + 9 : pieceSquare - 7;
                 attackMask |= BoardUtil.squareMask[targetSquare];
+                pawnAttackMask |= BoardUtil.squareMask[targetSquare];
 
                 if (targetSquare == player.kingSquare) {
                     if (isChecked) isDoubleChecked = true;
@@ -157,8 +160,16 @@ public class MoveGenerator {
         return (BoardUtil.squareMask[square] & checkMask) != 0;
     }
 
-    private void generateLegalMoves(boolean capturesOnly) {
+    private boolean isAttackedByPawn(byte square) {
+        return (BoardUtil.squareMask[square] & pawnAttackMask) != 0;
+    }
+
+    private void generateLegalMoves(Move previousBestMove, boolean capturesOnly) {
         legalMoves = new ArrayList<>();
+        if (previousBestMove != null) {
+            previousBestMove.moveGain = Integer.MAX_VALUE;
+            legalMoves.add(previousBestMove);
+        }
 
         // king moves
         for (byte targetSquare : BoardUtil.KING_MOVES[player.kingSquare]) {
@@ -213,14 +224,14 @@ public class MoveGenerator {
                         else continue;
                     }
 
+                    int loss = isAttackedByPawn(targetSquare) ? PieceUtil.getPieceValue(manager.board[pieceSquare]) : 0;
                     if (targetPiece != PieceUtil.TYPE_NONE) {
                         if (targetPieceColor == opponent.color) {
-                            int gain = PieceUtil.getPieceValue(targetPiece) - PieceUtil.getPieceValue(manager.board[pieceSquare]) / 10;
-                            legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, gain));
+                            legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, PieceUtil.getPieceValue(targetPiece) - loss));
                         }
                         break;
                     } else if (!capturesOnly) {
-                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, 0));
+                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, loss));
                     }
                 }
             }
@@ -241,11 +252,11 @@ public class MoveGenerator {
                 }
 
                 byte targetPiece = PieceUtil.getPieceType(manager.board[targetSquare]);
+                int loss = isAttackedByPawn(targetSquare) ? PieceUtil.getPieceValue(manager.board[pieceSquare]) : 0;
                 if (targetPiece == PieceUtil.TYPE_NONE && !capturesOnly) {
-                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, 0));
+                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, loss));
                 } else if (targetPiece != PieceUtil.TYPE_NONE && PieceUtil.getPieceColor(manager.board[targetSquare]) == opponent.color) {
-                    int gain = PieceUtil.getPieceValue(targetPiece) - PieceUtil.KNIGHT_VALUE / 10;
-                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, gain));
+                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, PieceUtil.getPieceValue(targetPiece) - loss));
                 }
             }
         }

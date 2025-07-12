@@ -1,4 +1,4 @@
-package game;
+package game.v3;
 
 public class Move implements Comparable<Move> {
     public final static byte MOVE_DEFAULT = 0;
@@ -14,7 +14,7 @@ public class Move implements Comparable<Move> {
     public byte startSquare;
     public byte targetSquare;
     public byte moveType;
-    private final int moveGain;
+    public int moveGain;
 
     public Move(byte startSquare, byte targetSquare, byte moveType, int moveGain) {
         this.startSquare = startSquare;

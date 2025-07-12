@@ -1,4 +1,4 @@
-import game.Manager;
+import game.v3.Manager;
 
 public class BoardSetupTest {
     public static void main(String[] args) {

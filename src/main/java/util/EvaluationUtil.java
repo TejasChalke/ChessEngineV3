@@ -10,18 +10,18 @@ public class EvaluationUtil {
     public static final byte[][] BISHOP_TABLE = new byte[2][];
     public static final byte[][] KING_MID_TABLE = new byte[2][];
     public static final byte[][] KING_END_TABLE = new byte[2][];
-//    public static final int ALL_PIECES_VALUE = PieceUtil.QUEEN_VALUE + PieceUtil.ROOK_VALUE * 2 + PieceUtil.BISHOP_VALUE * 2 + PieceUtil.KNIGHT_VALUE * 2 + PieceUtil.PAWN_VALUE * 8;
+    public static final int ALL_PIECES_VALUE = PieceUtil.QUEEN_VALUE + PieceUtil.ROOK_VALUE * 2 + PieceUtil.BISHOP_VALUE * 2 + PieceUtil.KNIGHT_VALUE * 2 + PieceUtil.PAWN_VALUE * 8;
     public static final int END_GAME_VALUE_CUTOFF = PieceUtil.ROOK_VALUE + PieceUtil.BISHOP_VALUE + PieceUtil.KNIGHT_VALUE + PieceUtil.PAWN_VALUE * 4;
 
     static {
         PAWN_TABLE[WHITE_INDEX] = new byte[] {
                 0,  0,  0,  0,  0,  0,  0,  0,
-                5, 10, 10,-20,-20, 10, 10,  5,
-                5, -5,-10,  0,  0,-10, -5,  5,
-                0,  0,  0, 20, 20,  0,  0,  0,
+                50, 50, 50,50, 50, 50, 50, 50,
+                40, 40, 40,40, 40, 40, 40, 40,
+                0,  0,  0, 35, 35,  0,  0,  0,
                 5,  5, 10, 35, 35, 10,  5,  5,
                 10, 10, 20,25, 25, 20, 10, 10,
-                50, 50, 50,-10, -10, 50, 50, 50,
+                50, 50, 50,-10,-10, 50, 50, 50,
                 0,  0,  0,  0,  0,  0,  0,  0
         };
         PAWN_TABLE[BLACK_INDEX] = mirrorForBlack(PAWN_TABLE[WHITE_INDEX]);
@@ -44,7 +44,7 @@ public class EvaluationUtil {
                 -10,  0,  5, 10, 10,  5,  0,-10,
                 -10,  0,  5, 10, 10,  5,  0,-10,
                 -10,  5,  5, 10, 10,  5,  5,-10,
-                -10,  10, 10,10, 10, 10, 10,-10,
+                -10,  20, 20, 5,  5, 20, 20,-10,
                 -10,  5,  0,  5,  5,  0,  5,-10,
                 -20,-10,-10,-10,-10,-10,-10,-20
         };
@@ -52,13 +52,13 @@ public class EvaluationUtil {
 
         ROOK_TABLE[WHITE_INDEX] = new byte[] {
                 0,  0,  0,  0,  0,  0,  0,  0,
-                5, 10, 10, 10, 10, 10, 10,  5,
+                20, 50, 50, 50, 50, 50, 50, 20,
                 -5,  0,  0,  0,  0,  0,  0, -5,
                 -5,  0,  0,  0,  0,  0,  0, -5,
                 -5,  0,  0,  0,  0,  0,  0, -5,
                 -5,  0,  0,  0,  0,  0,  0, -5,
                 -5,  0,  0,  0,  0,  0,  0, -5,
-                0,  0,  5,  10, 10,  5,  0,  0
+                0,   0, 20, 50, 50, 20,  0,  0
         };
         ROOK_TABLE[BLACK_INDEX] = mirrorForBlack(ROOK_TABLE[WHITE_INDEX]);
 
@@ -81,8 +81,8 @@ public class EvaluationUtil {
                 -30,-40,-40,-50,-50,-40,-40,-30,
                 -20,-30,-30,-40,-40,-30,-30,-20,
                 -10,-20,-20,-20,-20,-20,-20,-10,
-                20, 20,  0,  0,  0,  0, 20, 20,
-                30, 40, 35,  0,  0, 10, 40, 30
+                20, 20, -20,-20,-20,-20, 20, 20,
+                25, 40, 35, -20, -20, 10, 40, 25
         };
         KING_MID_TABLE[BLACK_INDEX] = mirrorForBlack(KING_MID_TABLE[WHITE_INDEX]);
 

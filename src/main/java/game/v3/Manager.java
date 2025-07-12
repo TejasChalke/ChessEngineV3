@@ -1,10 +1,11 @@
-package game;
+package game.v3;
 
 import util.BoardUtil;
 import util.EvaluationUtil;
 import util.PieceUtil;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class Manager {
     public byte[] board;
@@ -108,6 +109,8 @@ public class Manager {
     public void playMove(Move move) {
         engine.makeMove(move);
         engine.previousMoves.clear();
+        String posKey = Arrays.toString(board);
+        engine.repeatedPositions.put(posKey, engine.repeatedPositions.getOrDefault(posKey, 0) + 1);
     }
 
     public long test(int depth) {

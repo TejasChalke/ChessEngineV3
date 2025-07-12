@@ -1,37 +1,50 @@
-package game;
+package game.v3;
 
 import util.BoardUtil;
 import util.PieceUtil;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Stack;
+import java.util.*;
 
 public class Engine {
     private final Manager manager;
     private final MoveGenerator generator;
     private final Evaluator evaluator;
     private Move bestMove;
-    private int currentMaxDepth;
-    Stack<MoveInfo> previousMoves;
+    private Move bestMoveThisIteration;
+    public Stack<MoveInfo> previousMoves;
+    public HashMap<String, Integer> repeatedPositions;
 
     private final int MAX_EVAL = (int)1e9;
     private final int CHECKMATE_EVAL = (int)1e7;
+
+    private boolean searchCancelled;
+    private long searchEndTime;
+    private final long searchTimeAllowed = 1000 * 3;
 
     public Engine(Manager manager) {
         bestMove = null;
         this.manager = manager;
         generator = new MoveGenerator(manager);
         evaluator = new Evaluator(manager);
-        currentMaxDepth = 0;
         previousMoves = new Stack<>();
+        repeatedPositions = new HashMap<>();
     }
 
     public Move getBestMove() {
         // TODO: implement iterative deepening
         bestMove = null;
-        findBestMove(4, 0, -MAX_EVAL, MAX_EVAL);
+        searchCancelled = false;
+        searchEndTime = searchTimeAllowed + System.currentTimeMillis();
+
+        int currentDepth = 1;
+        while (!searchCancelled) {
+            bestMoveThisIteration = null;
+            findBestMove(currentDepth++, 0, -MAX_EVAL, MAX_EVAL);
+            if (bestMoveThisIteration != null) {
+                bestMove = bestMoveThisIteration;
+            }
+        }
+
         if (bestMove == null) {
             if (!generator.isChecked) bestMove = new Move((byte)-3, (byte)0, (byte)0, 0);
             else bestMove = new Move((byte)(manager.whiteToMove ? -2 : -1), (byte)0, (byte)0, 0);
@@ -40,37 +53,61 @@ public class Engine {
     }
 
     public ArrayList<Move> getLegalMoves() {
-        return generator.getLegalMoves(false);
+        return generator.getLegalMoves(null, false);
     }
 
     public int findBestMove(int depth, int depthFromRoot, int alpha, int beta) {
+        // This will add the best move from previous depth's search
+        ArrayList<Move> legaMoves = generator.getLegalMoves(depthFromRoot == 0 ? bestMove : null, false);
+        // checkmate or stalemate
+        if (legaMoves.isEmpty()) return generator.isChecked ? -(CHECKMATE_EVAL - depthFromRoot) : 0;
+
         if (depth == 0) {
             return findQuitePosition(alpha, beta);
         }
 
-        // 50 move rule
-        if (manager.halfMoveClock == 50) return 0;
-        ArrayList<Move> legaMoves = generator.getLegalMoves(false);
+        // 50 move rule or search time over
+        if (manager.halfMoveClock == 50 || searchCancelled || updateSearchCancelled()) {
+            return 0;
+        }
 
-        // checkmate or stalemate
-        if (legaMoves.isEmpty()) return generator.isChecked ? -(CHECKMATE_EVAL - depthFromRoot) : 0;
+        String currentPos = Arrays.toString(manager.board);
+        if (repeatedPositions.containsKey(currentPos)) {
+            int cnt = repeatedPositions.get(currentPos);
+            if (cnt == 3) return 0; // draw by repetition
+            else repeatedPositions.put(currentPos, cnt + 1);
+        } else {
+            repeatedPositions.put(currentPos, 1);
+        }
+
         Collections.sort(legaMoves);
-
         for (Move move : legaMoves) {
+            if (searchCancelled || updateSearchCancelled()) {
+                repeatedPositions.put(currentPos, repeatedPositions.get(currentPos) - 1);
+                return 0;
+            }
+
             makeMove(move);
             int eval = -findBestMove(depth - 1, depthFromRoot + 1, -beta, -alpha);
             unMakeMove(move);
 
+            if (searchCancelled || updateSearchCancelled()) {
+                repeatedPositions.put(currentPos, repeatedPositions.get(currentPos) - 1);
+                return 0;
+            }
+
             if (beta <= alpha) {
+                repeatedPositions.put(currentPos, repeatedPositions.get(currentPos) - 1);
                 return beta;
             }
             if (alpha < eval) {
                 alpha = eval;
                 if (depthFromRoot == 0) {
-                    bestMove = move;
+                    bestMoveThisIteration = move;
                 }
             }
         }
+        repeatedPositions.put(currentPos, repeatedPositions.get(currentPos) - 1);
         return alpha;
     }
 
@@ -82,7 +119,7 @@ public class Engine {
             alpha = eval;
         }
 
-        ArrayList<Move> legaMoves = generator.getLegalMoves(true);
+        ArrayList<Move> legaMoves = generator.getLegalMoves(null, true);
         Collections.sort(legaMoves);
 
         for (Move move : legaMoves) {
@@ -290,7 +327,7 @@ public class Engine {
         if (depth == 0) {
             return 1;
         }
-        ArrayList<Move> legaMoves = generator.getLegalMoves(false);
+        ArrayList<Move> legaMoves = generator.getLegalMoves(null, false);
         long moves = 0;
         for (Move move : legaMoves) {
             makeMove(move);
@@ -299,5 +336,12 @@ public class Engine {
             unMakeMove(move);
         }
         return moves;
+    }
+
+    private boolean updateSearchCancelled() {
+        if (searchEndTime < System.currentTimeMillis()) {
+            searchCancelled =  true;
+        }
+        return searchCancelled;
     }
 }

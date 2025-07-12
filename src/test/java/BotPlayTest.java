@@ -1,6 +1,5 @@
-import game.Bot;
-import game.Manager;
-import game.Move;
+import game.v3.Bot;
+import game.v3.Move;
 import util.BoardUtil;
 
 public class BotPlayTest {
@@ -18,11 +17,6 @@ public class BotPlayTest {
             BoardUtil.displayBoard(player.getBoard());
 
             whiteToPlay = !whiteToPlay;
-            try {
-                Thread.sleep(1500);
-            } catch (InterruptedException e) {
-                System.out.println("Interrupted sleep...");
-            }
         }
     }
 }

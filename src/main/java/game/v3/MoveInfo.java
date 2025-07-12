@@ -1,4 +1,4 @@
-package game;
+package game.v3;
 
 import util.PieceUtil;
 
