@@ -1,9 +1,12 @@
-package game.v3;
+package game.v4;
+
+import util.BoardUtil;
 
 public class Pieces {
     public byte currentCnt;
     public byte[] positions;
     public byte[] localBoard;
+    public long bitBoard;
 
     public Pieces(int count) {
         currentCnt = 0;
@@ -12,11 +15,13 @@ public class Pieces {
     }
 
     public void addPiece(byte square) {
+        bitBoard |= BoardUtil.squareMask[square];
         positions[currentCnt] = square;
         localBoard[square] = currentCnt++;
     }
 
     public void removePiece(byte square) {
+        bitBoard ^= BoardUtil.squareMask[square];
         currentCnt--;
         if (currentCnt == 0) {
             return;
@@ -30,6 +35,7 @@ public class Pieces {
     }
 
     public void updatePosition(byte startSquare, byte targetSquare) {
+        bitBoard = bitBoard | BoardUtil.squareMask[targetSquare] ^ BoardUtil.squareMask[startSquare];
         byte positionIndex = localBoard[startSquare];
         positions[positionIndex] = targetSquare;
         localBoard[targetSquare] = positionIndex;

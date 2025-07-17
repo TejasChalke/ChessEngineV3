@@ -1,4 +1,4 @@
-package game.v3;
+package game.v4;
 
 import util.BoardUtil;
 import util.PieceUtil;
@@ -8,22 +8,28 @@ import java.util.*;
 public class Engine {
     private final Manager manager;
     private final MoveGenerator generator;
+    public TranspositionTable table;
+    public Zobrist zobrist;
     private final Evaluator evaluator;
+    public Stack<MoveInfo> previousMoves;
+    public HashMap<Long, Integer> repeatedPositions;
+
+    private final int MAX_EVAL = (int)1e8;
+    private final int CHECKMATE_EVAL = (int)1e6;
+
     private Move bestMove;
     private Move bestMoveThisIteration;
-    public Stack<MoveInfo> previousMoves;
-    public HashMap<String, Integer> repeatedPositions;
-
-    private final int MAX_EVAL = (int)1e9;
-    private final int CHECKMATE_EVAL = (int)1e7;
+    private int bestEvalThisIteration;
 
     private boolean searchCancelled;
     private long searchEndTime;
-    private final long searchTimeAllowed = 1000 * 3;
+    private final long searchTimeAllowed = 1000;
 
     public Engine(Manager manager) {
         bestMove = null;
         this.manager = manager;
+        table = new TranspositionTable(1 << 20);
+        zobrist = new Zobrist(manager.board, manager.castleRights, manager.epSquare);
         generator = new MoveGenerator(manager);
         evaluator = new Evaluator(manager);
         previousMoves = new Stack<>();
@@ -31,19 +37,27 @@ public class Engine {
     }
 
     public Move getBestMove() {
-        // TODO: implement iterative deepening
         bestMove = null;
         searchCancelled = false;
         searchEndTime = searchTimeAllowed + System.currentTimeMillis();
+        table.clear();
 
-        int currentDepth = 1;
+        int currentDepth = 1, bestEval = 0;
         while (!searchCancelled) {
+            bestEvalThisIteration = 0;
             bestMoveThisIteration = null;
+
             findBestMove(currentDepth++, 0, -MAX_EVAL, MAX_EVAL);
+            if (searchCancelled) break;
+
+            bestEval = bestEvalThisIteration;
             if (bestMoveThisIteration != null) {
                 bestMove = bestMoveThisIteration;
             }
         }
+
+//        if (bestMove != null)
+//            System.out.println("For depth " + (currentDepth - 1) + " best move for " + manager.getPlayer().getName() + " (" + BoardUtil.getUCINotation(bestMove) + ") with eval " + bestEval);
 
         if (bestMove == null) {
             if (!generator.isChecked) bestMove = new Move((byte)-3, (byte)0, (byte)0, 0);
@@ -57,13 +71,16 @@ public class Engine {
     }
 
     public int findBestMove(int depth, int depthFromRoot, int alpha, int beta) {
+        if (depth == 0) {
+            return findQuitePosition(alpha, beta);
+        }
+
         // This will add the best move from previous depth's search
         ArrayList<Move> legaMoves = generator.getLegalMoves(depthFromRoot == 0 ? bestMove : null, false);
         // checkmate or stalemate
-        if (legaMoves.isEmpty()) return generator.isChecked ? -(CHECKMATE_EVAL - depthFromRoot) : 0;
-
-        if (depth == 0) {
-            return findQuitePosition(alpha, beta);
+        if (legaMoves.isEmpty()) {
+            updateSearchCancelled();
+            return generator.isChecked ? -(CHECKMATE_EVAL - depthFromRoot) : 0;
         }
 
         // 50 move rule or search time over
@@ -71,49 +88,65 @@ public class Engine {
             return 0;
         }
 
-        String currentPos = Arrays.toString(manager.board);
+        long currentPos = zobrist.hash;
         if (repeatedPositions.containsKey(currentPos)) {
             int cnt = repeatedPositions.get(currentPos);
-            if (cnt == 3) return 0; // draw by repetition
+            if (cnt == 3) {
+                return 0; // draw by repetition
+            }
             else repeatedPositions.put(currentPos, cnt + 1);
         } else {
             repeatedPositions.put(currentPos, 1);
         }
 
-        Collections.sort(legaMoves);
-        for (Move move : legaMoves) {
-            if (searchCancelled || updateSearchCancelled()) {
+        if (table.hasEntry(zobrist.hash, depth)) {
+            int ttEval = table.getEval(alpha, beta);
+            if (ttEval != TranspositionTable.lookUpFailedValue) {
+                if (depthFromRoot == 0) {
+                    bestEvalThisIteration = ttEval;
+                    bestMoveThisIteration = table.getMove();
+                }
                 repeatedPositions.put(currentPos, repeatedPositions.get(currentPos) - 1);
-                return 0;
+                return ttEval;
             }
+        }
 
+        Collections.sort(legaMoves);
+        Move bestMoveThisDepth = null;
+        byte entryType = Entry.TYPE_UPPER_BOUND;
+        for (Move move : legaMoves) {
             makeMove(move);
             int eval = -findBestMove(depth - 1, depthFromRoot + 1, -beta, -alpha);
             unMakeMove(move);
 
-            if (searchCancelled || updateSearchCancelled()) {
+            if (searchCancelled) {
                 repeatedPositions.put(currentPos, repeatedPositions.get(currentPos) - 1);
                 return 0;
             }
 
-            if (beta <= alpha) {
+            if (beta <= eval) {
+                table.putEntry(zobrist.hash, Entry.TYPE_LOWER_BOUND, depth, beta, move);
                 repeatedPositions.put(currentPos, repeatedPositions.get(currentPos) - 1);
                 return beta;
-            }
-            if (alpha < eval) {
+            } else if (alpha < eval) {
                 alpha = eval;
+                bestMoveThisDepth = move;
+                entryType = Entry.TYPE_EXACT;
                 if (depthFromRoot == 0) {
+                    bestEvalThisIteration = eval;
                     bestMoveThisIteration = move;
                 }
             }
         }
+
         repeatedPositions.put(currentPos, repeatedPositions.get(currentPos) - 1);
+        table.putEntry(zobrist.hash, entryType, depth, alpha, bestMoveThisDepth);
         return alpha;
     }
 
     public int findQuitePosition(int alpha, int beta) {
         int eval = evaluator.evaluate();
-        if (eval >= beta) {
+        if (beta < eval) {
             return beta;
         } else if (alpha < eval) {
             alpha = eval;
@@ -139,13 +172,20 @@ public class Engine {
 
     public void makeMove(Move move) {
         MoveInfo moveInfo = new MoveInfo(manager.epSquare, manager.castleRights, manager.halfMoveClock);
-        manager.epSquare = -1;
+        if (manager.epSquare != -1) {
+            zobrist.updateEPHash(manager.epSquare);
+            manager.epSquare = -1;
+        }
+        if (manager.castleRights != 0) {
+            zobrist.updateCastleHash(manager.castleRights);
+        }
 
         if (Move.isPromotionMove(move.moveType)) {
             byte targetPiece = manager.board[move.targetSquare];
             if (targetPiece != PieceUtil.TYPE_NONE) {
                 moveInfo.piece = targetPiece;
                 manager.getOpponent().getPieces(targetPiece).removePiece(move.targetSquare);
+                zobrist.updateMoveHash(targetPiece, move.targetSquare, -1);
             }
 
             if (manager.castleRights != 0) {
@@ -161,7 +201,10 @@ public class Engine {
             }
 
             byte newPiece = (byte)(PieceUtil.getPromotionPiece(move.moveType) | manager.getPlayer().color);
+            zobrist.updateMoveHash(newPiece, move.targetSquare, -1);
             manager.board[move.targetSquare] = newPiece;
+
+            zobrist.updateMoveHash(manager.board[move.startSquare], move.startSquare, -1);
             manager.board[move.startSquare] = PieceUtil.TYPE_NONE;
 
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).removePiece(move.startSquare);
@@ -170,34 +213,47 @@ public class Engine {
         } else if (Move.MOVE_CKS == move.moveType) {
             byte kingSquare = manager.getPlayer().kingSquare;
             manager.board[kingSquare + 1] = manager.board[kingSquare + 3];
-            manager.board[kingSquare + 2] = manager.board[kingSquare];
-            manager.board[kingSquare] = manager.board[kingSquare + 3] = PieceUtil.TYPE_NONE;
+            zobrist.updateMoveHash(manager.board[kingSquare + 1], kingSquare + 3, kingSquare + 1);
 
+            manager.board[kingSquare + 2] = manager.board[kingSquare];
+            zobrist.updateMoveHash(manager.board[kingSquare + 2], kingSquare, kingSquare + 2);
+
+            manager.board[kingSquare] = manager.board[kingSquare + 3] = PieceUtil.TYPE_NONE;
             manager.removePlayerCastleRights();
+
             manager.getPlayer().kingSquare = move.targetSquare;
             manager.getPlayer().getPieces(PieceUtil.TYPE_ROOK).updatePosition((byte)(move.targetSquare + 1), (byte)(move.targetSquare - 1));
             manager.halfMoveClock++;
         } else if (Move.MOVE_CQS == move.moveType) {
             byte kingSquare = manager.getPlayer().kingSquare;
             manager.board[kingSquare - 1] = manager.board[kingSquare - 4];
-            manager.board[kingSquare - 2] = manager.board[kingSquare];
-            manager.board[kingSquare] = manager.board[kingSquare - 4] = PieceUtil.TYPE_NONE;
+            zobrist.updateMoveHash(manager.board[kingSquare - 1], kingSquare - 4, kingSquare - 1);
 
+            manager.board[kingSquare - 2] = manager.board[kingSquare];
+            zobrist.updateMoveHash(manager.board[kingSquare - 2], kingSquare, kingSquare - 2);
+
+            manager.board[kingSquare] = manager.board[kingSquare - 4] = PieceUtil.TYPE_NONE;
             manager.removePlayerCastleRights();
+
             manager.getPlayer().kingSquare = move.targetSquare;
             manager.getPlayer().getPieces(PieceUtil.TYPE_ROOK).updatePosition((byte)(move.targetSquare - 2), (byte)(move.targetSquare + 1));
             manager.halfMoveClock++;
         } else if (Move.MOVE_2_SQUARES == move.moveType) {
             manager.board[move.targetSquare] = manager.board[move.startSquare];
+            zobrist.updateMoveHash(manager.board[move.startSquare], move.startSquare, move.targetSquare);
+
             manager.board[move.startSquare] = PieceUtil.TYPE_NONE;
             manager.epSquare = (byte)(move.targetSquare + (manager.whiteToMove ? -8 : 8));
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.startSquare, move.targetSquare);
             manager.halfMoveClock = 0;
+            zobrist.updateEPHash(move.targetSquare);
         } else if (Move.MOVE_EP == move.moveType) {
             manager.board[move.targetSquare] = manager.board[move.startSquare];
-            manager.board[move.startSquare] = PieceUtil.TYPE_NONE;
+            zobrist.updateMoveHash(manager.board[move.startSquare], move.startSquare, move.targetSquare);
 
+            manager.board[move.startSquare] = PieceUtil.TYPE_NONE;
             moveInfo.piece = manager.board[move.targetSquare + (manager.whiteToMove ? -8 : 8)];
+            zobrist.updateMoveHash(moveInfo.piece, move.targetSquare + (manager.whiteToMove ? -8 : 8), -1);
             manager.board[move.targetSquare + (manager.whiteToMove ? -8 : 8)] = PieceUtil.TYPE_NONE;
 
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.startSquare, move.targetSquare);
@@ -209,6 +265,7 @@ public class Engine {
 
             if (targetPiece != PieceUtil.TYPE_NONE) {
                 moveInfo.piece = targetPiece;
+                zobrist.updateMoveHash(targetPiece, move.targetSquare, -1);
                 manager.getOpponent().getPieces(targetPiece).removePiece(move.targetSquare);
 
                 if (manager.castleRights != 0 && PieceUtil.TYPE_ROOK == PieceUtil.getPieceType(targetPiece)) {
@@ -253,55 +310,92 @@ public class Engine {
                 manager.getPlayer().kingSquare = move.targetSquare;
             }
 
+            zobrist.updateMoveHash(manager.board[move.startSquare], move.startSquare, move.targetSquare);
             manager.board[move.targetSquare] = manager.board[move.startSquare];
             manager.board[move.startSquare] = PieceUtil.TYPE_NONE;
         }
 
+        zobrist.updatePlayerHash();
+        if (manager.castleRights != 0) {
+            zobrist.updateCastleHash(manager.castleRights);
+        }
         manager.whiteToMove = !manager.whiteToMove;
         previousMoves.push(moveInfo);
     }
 
     private void unMakeMove(Move move) {
+        zobrist.updatePlayerHash();
+        if (manager.epSquare != -1) {
+            zobrist.updateEPHash(manager.epSquare);
+        }
+        if (manager.castleRights != 0) {
+            zobrist.updateCastleHash(manager.castleRights);
+        }
+
         MoveInfo moveInfo = previousMoves.pop();
         manager.whiteToMove = !manager.whiteToMove;
         manager.epSquare = moveInfo.epSquare;
         manager.castleRights = moveInfo.castleRights;
         manager.halfMoveClock = moveInfo.halfMoveClock;
 
+        if (manager.epSquare != -1) {
+            zobrist.updateEPHash(manager.epSquare);
+        }
+        if (manager.castleRights != 0) {
+            zobrist.updateCastleHash(manager.castleRights);
+        }
+
         if (Move.isPromotionMove(move.moveType)) {
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).addPiece(move.startSquare);
             manager.getPlayer().getPieces(manager.board[move.targetSquare]).removePiece(move.targetSquare);
+            zobrist.updateMoveHash(manager.board[move.targetSquare], move.targetSquare, -1);
+
             if (moveInfo.piece != PieceUtil.TYPE_NONE) {
                 manager.getOpponent().getPieces(moveInfo.piece).addPiece(move.targetSquare);
+                zobrist.updateMoveHash(moveInfo.piece, move.targetSquare, -1);
             }
 
             manager.board[move.startSquare] = (byte)(PieceUtil.TYPE_PAWN | manager.getPlayer().color);
+            zobrist.updateMoveHash(manager.board[move.startSquare], move.startSquare, -1);
             manager.board[move.targetSquare] = moveInfo.piece;
         } else if (Move.MOVE_CKS == move.moveType) {
             byte kingSquare = manager.getPlayer().kingSquare;
             manager.getPlayer().getPieces(PieceUtil.TYPE_ROOK).updatePosition((byte)(kingSquare - 1), (byte)(kingSquare + 1));
 
+            zobrist.updateMoveHash(manager.board[kingSquare - 1], kingSquare - 1, kingSquare + 1);
             manager.board[kingSquare + 1] = manager.board[kingSquare - 1];
+
+            zobrist.updateMoveHash(manager.board[kingSquare], kingSquare, kingSquare - 2);
             manager.board[kingSquare - 2] = manager.board[kingSquare];
+
             manager.board[kingSquare] = manager.board[kingSquare - 1] = PieceUtil.TYPE_NONE;
             manager.getPlayer().kingSquare = move.startSquare;
         } else if (Move.MOVE_CQS == move.moveType) {
             byte kingSquare = manager.getPlayer().kingSquare;
             manager.getPlayer().getPieces(PieceUtil.TYPE_ROOK).updatePosition((byte)(kingSquare + 1), (byte)(kingSquare - 2));
 
+            zobrist.updateMoveHash(manager.board[kingSquare + 1], kingSquare + 1, kingSquare - 2);
             manager.board[kingSquare - 2] = manager.board[kingSquare + 1];
+
+            zobrist.updateMoveHash(manager.board[kingSquare], kingSquare, kingSquare + 2);
             manager.board[kingSquare + 2] = manager.board[kingSquare];
+
             manager.board[kingSquare] = manager.board[kingSquare + 1] = PieceUtil.TYPE_NONE;
             manager.getPlayer().kingSquare = move.startSquare;
         } else if (Move.MOVE_2_SQUARES == move.moveType) {
+            zobrist.updateMoveHash(manager.board[move.targetSquare], move.targetSquare, move.startSquare);
             manager.board[move.startSquare] = manager.board[move.targetSquare];
+
             manager.board[move.targetSquare] = PieceUtil.TYPE_NONE;
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.targetSquare, move.startSquare);
         } else if (Move.MOVE_EP == move.moveType) {
+            zobrist.updateMoveHash(manager.board[move.targetSquare], move.targetSquare, move.startSquare);
             manager.board[move.startSquare] = manager.board[move.targetSquare];
             manager.board[move.targetSquare] = PieceUtil.TYPE_NONE;
 
+            zobrist.updateMoveHash(moveInfo.piece, move.targetSquare + (manager.whiteToMove ? -8 : 8), -1);
             manager.board[move.targetSquare + (manager.whiteToMove ? -8 : 8)] = moveInfo.piece;
+
             manager.getPlayer().getPieces(PieceUtil.TYPE_PAWN).updatePosition(move.targetSquare, move.startSquare);
             manager.getOpponent().getPieces(PieceUtil.TYPE_PAWN).addPiece((byte)(move.targetSquare + (manager.whiteToMove ? -8 : 8)));
         } else {
@@ -312,8 +406,11 @@ public class Engine {
             }
 
             if (moveInfo.piece != PieceUtil.TYPE_NONE) {
+                zobrist.updateMoveHash(moveInfo.piece, move.targetSquare, -1);
                 manager.getOpponent().getPieces(moveInfo.piece).addPiece(move.targetSquare);
             }
+
+            zobrist.updateMoveHash(manager.board[move.targetSquare], move.targetSquare, move.startSquare);
             manager.board[move.startSquare] = manager.board[move.targetSquare];
             manager.board[move.targetSquare] = moveInfo.piece;
         }

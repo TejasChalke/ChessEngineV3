@@ -1,4 +1,6 @@
-package game.v3;
+package game.v4;
+
+import util.BoardUtil;
 
 import java.util.ArrayList;
 
@@ -16,7 +18,10 @@ public class Bot {
 
     public Move playBotMove() {
         Move move = manager.playBotMove();
-        if (move.startSquare < 0) isGameOver = true;
+        if (move.startSquare < 0) {
+            System.out.println(move.startSquare);
+            isGameOver = true;
+        }
         return move;
     }
 

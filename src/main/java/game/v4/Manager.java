@@ -1,4 +1,4 @@
-package game.v3;
+package game.v4;
 
 import util.BoardUtil;
 import util.EvaluationUtil;
@@ -109,7 +109,7 @@ public class Manager {
     public void playMove(Move move) {
         engine.makeMove(move);
         engine.previousMoves.clear();
-        String posKey = Arrays.toString(board);
+        long posKey = engine.zobrist.hash;
         engine.repeatedPositions.put(posKey, engine.repeatedPositions.getOrDefault(posKey, 0) + 1);
     }
 

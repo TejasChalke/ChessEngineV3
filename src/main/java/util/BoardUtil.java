@@ -1,5 +1,7 @@
 package util;
 
+import game.v4.Move;
+
 import java.util.ArrayList;
 
 public class BoardUtil {
@@ -104,10 +106,24 @@ public class BoardUtil {
         return (byte)(rank * 8 + file);
     }
 
-    public static String getStandardNotation(byte square) {
+    public static String getUCINotation(Move move) {
+        return getUCINotation(move.startSquare) + getUCINotation(move.targetSquare) + getUCIPieceNotation(move.moveType);
+    }
+
+    public static String getUCINotation(byte square) {
         char file = (char)('a' + (square % 8));
         char rank = (char)('1' + (square / 8));
         return "" + file + rank;
+    }
+
+    public static char getUCIPieceNotation(byte moveType) {
+        return switch (moveType) {
+            case Move.MOVE_P_QUEEN -> 'q';
+            case Move.MOVE_P_ROOK -> 'r';
+            case Move.MOVE_P_BISHOP -> 'b';
+            case Move.MOVE_P_KNIGHT -> 'n';
+            default -> '\0';
+        };
     }
 
     public static boolean isMovingOnThePinLine(int k, int p, int t) {
@@ -160,8 +176,9 @@ public class BoardUtil {
         System.out.println("------------------------------");
     }
 
-    public static void displayAttackMask(long attackMask) {
+    public static void displayMask(long attackMask) {
         System.out.println("------------------------------");
+        System.out.println(Long.toBinaryString(attackMask) + " : " + Long.toBinaryString(attackMask).length());
         for (byte rank = 7; rank >= 0; rank--) {
             for (byte file = 0; file < 8; file++) {
                 byte square = getSquare(rank, file);

@@ -4,6 +4,7 @@ public class EvaluationUtil {
     public static byte WHITE_INDEX = 0;
     public static byte BLACK_INDEX = 1;
     public static final byte[][] PAWN_TABLE = new byte[2][];
+    public static final byte[][] PAWN_END_TABLE = new byte[2][];
     public static final byte[][] QUEEN_TABLE = new byte[2][];
     public static final byte[][] ROOK_TABLE = new byte[2][];
     public static final byte[][] KNIGHT_TABLE = new byte[2][];
@@ -12,12 +13,14 @@ public class EvaluationUtil {
     public static final byte[][] KING_END_TABLE = new byte[2][];
     public static final int ALL_PIECES_VALUE = PieceUtil.QUEEN_VALUE + PieceUtil.ROOK_VALUE * 2 + PieceUtil.BISHOP_VALUE * 2 + PieceUtil.KNIGHT_VALUE * 2 + PieceUtil.PAWN_VALUE * 8;
     public static final int END_GAME_VALUE_CUTOFF = PieceUtil.ROOK_VALUE + PieceUtil.BISHOP_VALUE + PieceUtil.KNIGHT_VALUE + PieceUtil.PAWN_VALUE * 4;
+    public static final long[] fileMask = new long[8];
+    public static final int[] passedPawnGain;
 
     static {
         PAWN_TABLE[WHITE_INDEX] = new byte[] {
                 0,  0,  0,  0,  0,  0,  0,  0,
-                50, 50, 50,50, 50, 50, 50, 50,
-                40, 40, 40,40, 40, 40, 40, 40,
+                30, 30, 30,30, 30, 30, 30, 30,
+                20, 20, 20,10, 10, 20, 20, 20,
                 0,  0,  0, 35, 35,  0,  0,  0,
                 5,  5, 10, 35, 35, 10,  5,  5,
                 10, 10, 20,25, 25, 20, 10, 10,
@@ -25,6 +28,18 @@ public class EvaluationUtil {
                 0,  0,  0,  0,  0,  0,  0,  0
         };
         PAWN_TABLE[BLACK_INDEX] = mirrorForBlack(PAWN_TABLE[WHITE_INDEX]);
+
+        PAWN_END_TABLE[WHITE_INDEX] = new byte[] {
+                0,  0,  0,  0,  0,  0,  0,  0,
+                90, 90, 80,70, 70, 80, 90, 90,
+                80, 80, 70,60, 60, 70, 80, 80,
+                70, 70, 60,50, 50, 60, 70, 70,
+                40, 40, 30,30, 30, 30, 40, 40,
+                30, 30, 20,20, 20, 20, 30, 30,
+                -20,-20,-10,-10,-10,-10,-20,-20,
+                0,  0,  0,  0,  0,  0,  0,  0
+        };
+        PAWN_END_TABLE[BLACK_INDEX] = mirrorForBlack(PAWN_TABLE[WHITE_INDEX]);
 
         KNIGHT_TABLE[WHITE_INDEX] = new byte[] {
                 -50,-40,-30,-30,-30,-30,-40,-50,
@@ -87,16 +102,27 @@ public class EvaluationUtil {
         KING_MID_TABLE[BLACK_INDEX] = mirrorForBlack(KING_MID_TABLE[WHITE_INDEX]);
 
         KING_END_TABLE[WHITE_INDEX] = new byte[] {
-                -50,-40,-30,-20,-20,-30,-40,-50,
-                -30,-20,-10,  0,  0,-10,-20,-30,
-                -30,-10, 20, 30, 30, 20,-10,-30,
-                -30,-10, 30, 40, 40, 30,-10,-30,
-                -30,-10, 30, 40, 40, 30,-10,-30,
+                 10, 15, 20, 20, 20, 20, 15, 10,
+                 15, 20, 30, 30, 30, 30, 20, 10,
+                 10, 20, 30, 30, 30, 30, 20, 10,
+                 10, 15, 30, 40, 40, 30, 15, 10,
+                 5,  10, 30, 40, 40, 30, 10,  5,
                 -30,-10, 20, 30, 30, 20,-10,-30,
                 -30,-30,  0,  0,  0,  0,-30,-30,
                 -50,-30,-30,-30,-30,-30,-30,-50
         };
         KING_END_TABLE[BLACK_INDEX] = mirrorForBlack(KING_END_TABLE[WHITE_INDEX]);
+
+        for (int file = 0; file < 8; file++) {
+            long initialMask = 1L << file;
+            long completeMask = 0;
+            for (int rank = 0; rank < 8; rank++) {
+                completeMask |= initialMask << (rank * 8);
+            }
+            fileMask[file] = completeMask;
+        }
+
+        passedPawnGain = new int[] { 0, 10, 20, 40, 55, 75, 100, 0};
     }
 
     public static byte[] mirrorForBlack(byte[] whiteTable) {

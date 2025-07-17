@@ -1,4 +1,4 @@
-package game.v3;
+package game.v4;
 
 public class Move implements Comparable<Move> {
     public final static byte MOVE_DEFAULT = 0;

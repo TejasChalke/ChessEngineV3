@@ -1,4 +1,4 @@
-package game.v3;
+package game.v4;
 
 import util.BoardUtil;
 import util.EvaluationUtil;
@@ -17,13 +17,16 @@ public class Evaluator {
 
         int playerPiecesValues = getPieceValues(player);
         int opponentPiecesValues = getPieceValues(opponent);
+        float playerEndGameWeight = (float)(EvaluationUtil.ALL_PIECES_VALUE - playerPiecesValues) / EvaluationUtil.ALL_PIECES_VALUE;
+        float opponentEndGameWeight = (float)(EvaluationUtil.ALL_PIECES_VALUE - opponentPiecesValues) / EvaluationUtil.ALL_PIECES_VALUE;
 
-        int evaluation =  playerPiecesValues - opponentPiecesValues;
-        evaluation += getPieceSquareValues(player, player.evalIndex, playerPiecesValues - opponentPiecesValues) - getPieceSquareValues(opponent, opponent.evalIndex, opponentPiecesValues - playerPiecesValues);
+        int evaluation = playerPiecesValues - opponentPiecesValues;
+        evaluation += getPieceSquareValues(player, opponent, player.evalIndex, playerEndGameWeight)
+                    - getPieceSquareValues(opponent, player, opponent.evalIndex, opponentEndGameWeight);
 
-        if (playerPiecesValues <= EvaluationUtil.END_GAME_VALUE_CUTOFF) {
+        if (Math.max(playerEndGameWeight, opponentEndGameWeight) >= 0.6) {
             evaluation += EvaluationUtil.KING_END_TABLE[player.evalIndex][player.kingSquare] - EvaluationUtil.KING_END_TABLE[opponent.evalIndex][opponent.kingSquare];
-            evaluation += getKingActivityValue(player, opponent, playerPiecesValues) - getKingActivityValue(opponent, player, opponentPiecesValues);
+            evaluation += getKingActivityValue(player, opponent, playerEndGameWeight) - getKingActivityValue(opponent, player, opponentEndGameWeight);
         } else {
             evaluation += EvaluationUtil.KING_MID_TABLE[player.evalIndex][player.kingSquare] - EvaluationUtil.KING_MID_TABLE[opponent.evalIndex][opponent.kingSquare];
             evaluation += getKingSafetyScore(player) - getKingSafetyScore(opponent);
@@ -41,8 +44,15 @@ public class Evaluator {
         return value;
     }
 
-    private int getPieceSquareValues(Player player, int index, int pieceValues) {
+    private int getPieceSquareValues(Player player, Player opponent, int index, float endGameWeight) {
         int value = 0;
+//        byte rank = 0, file = 0;
+        boolean isEndGame = endGameWeight > 0.6;
+//        if (isEndGame) {
+//            rank = BoardUtil.getRank(player.kingSquare);
+//            file = BoardUtil.getFile(player.kingSquare);
+//        }
+
         for (int i = 0; i < player.rooks.currentCnt; i++) {
             value += EvaluationUtil.ROOK_TABLE[index][player.rooks.positions[i]];
         }
@@ -53,31 +63,43 @@ public class Evaluator {
             value += EvaluationUtil.KNIGHT_TABLE[index][player.knights.positions[i]];
         }
         for (int i = 0; i < player.pawns.currentCnt; i++) {
-            value += EvaluationUtil.PAWN_TABLE[index][player.pawns.positions[i]];
+            byte pos = player.pawns.positions[i];
+
+            if (isEndGame) {
+                value += EvaluationUtil.PAWN_END_TABLE[index][pos] * 2;
+                byte rank = BoardUtil.getRank(pos);
+                byte file = BoardUtil.getFile(pos);
+
+                long fileMask = EvaluationUtil.fileMask[file] | (file > 0 ? EvaluationUtil.fileMask[file - 1] : 0) | (file < 7 ? EvaluationUtil.fileMask[file + 1] : 0);
+                long completeMask = fileMask << (8 * rank);
+                if ((completeMask & opponent.pawns.bitBoard) == 0) {
+                    value += EvaluationUtil.passedPawnGain[rank];
+                }
+            } else {
+                value += EvaluationUtil.PAWN_TABLE[index][pos];
+            }
         }
 
-        int queenValue = 0;
         for (int i = 0; i < player.queens.currentCnt; i++) {
-            queenValue += EvaluationUtil.QUEEN_TABLE[index][player.queens.positions[i]];
+            value += EvaluationUtil.QUEEN_TABLE[index][player.queens.positions[i]];
         }
-        // queen should not move out in the early game
-        queenValue = queenValue - (EvaluationUtil.END_GAME_VALUE_CUTOFF - pieceValues) / 20;
-
-        return value + queenValue;
+        return value;
     }
 
-    private int getKingActivityValue(Player player, Player opponent, int endGameWeight) {
-        short rank = BoardUtil.getRank(player.kingSquare);
-        short file = BoardUtil.getFile(player.kingSquare);
+    private int getKingActivityValue(Player player, Player opponent, float endGameWeight) {
+        byte rank = BoardUtil.getRank(player.kingSquare);
+        byte oRank = BoardUtil.getRank(opponent.kingSquare);
+        byte file = BoardUtil.getFile(player.kingSquare);
+        byte oFile = BoardUtil.getFile(opponent.kingSquare);
 
-        int cornerRankDistance = player.color == Player.WHITE ? 7 - rank : rank;
-        int cornerFileDistance = player.color == Player.WHITE ? 7 - file : file;
-        int cornerDistance = Math.max(cornerRankDistance, cornerFileDistance);
+        int cornerRankDistance = Math.min(7 - oRank, oRank);
+        int cornerFileDistance = Math.min(7 - oFile, oFile);
+        int opponentCornerDistance = Math.max(cornerRankDistance, cornerFileDistance);
 
-        short oRank = BoardUtil.getRank(opponent.kingSquare);
-        short oFile = BoardUtil.getFile(opponent.kingSquare);
         int kingDistance = Math.max(Math.abs(rank - oRank), Math.abs(file - oFile));
-        return (8 - Math.max(cornerDistance, kingDistance)) * endGameWeight;
+        int gain = (int)((player.color == Player.WHITE ? rank + oRank : 14 - rank - oRank) * endGameWeight * 2);
+        gain += (int)((14 - kingDistance - opponentCornerDistance) * endGameWeight * 3);
+        return gain;
     }
 
     private int getKingSafetyScore(Player player) {

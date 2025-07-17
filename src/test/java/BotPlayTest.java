@@ -1,5 +1,5 @@
-import game.v3.Bot;
-import game.v3.Move;
+import game.v4.Bot;
+import game.v4.Move;
 import util.BoardUtil;
 
 public class BotPlayTest {
@@ -8,7 +8,7 @@ public class BotPlayTest {
         Bot black = new Bot();
         boolean whiteToPlay = true;
 
-        while (!white.hasGameEnded()) {
+        while (!white.hasGameEnded() && !black.hasGameEnded()) {
             Bot player = whiteToPlay ? white : black;
             Bot opponent = !whiteToPlay ? white : black;
 

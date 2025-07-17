@@ -1,7 +1,7 @@
 package util;
 
-import game.v3.Move;
-import game.v3.Player;
+import game.v4.Move;
+import game.v4.Player;
 
 public class PieceUtil {
     public static final byte TYPE_INVALID = -1;

@@ -1,4 +1,4 @@
-package game.v3;
+package game.v4;
 
 import util.BoardUtil;
 import util.PieceUtil;
@@ -290,10 +290,10 @@ public class MoveGenerator {
                 if (!isChecked || isBlockingCheck(targetSquare)) {
                     if (rank == promotionRank) {
                         // promotion moves
-                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_QUEEN, PieceUtil.QUEEN_VALUE));
-                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_ROOK, PieceUtil.ROOK_VALUE));
-                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_BISHOP, PieceUtil.BISHOP_VALUE));
-                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_KNIGHT, PieceUtil.KNIGHT_VALUE));
+                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_QUEEN, 2500));
+                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_ROOK, 2000));
+                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_BISHOP, 1500));
+                        legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_KNIGHT, 1400));
                     } else {
                         legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, 0));
                     }
@@ -313,10 +313,10 @@ public class MoveGenerator {
                 int opponentPieceValue = PieceUtil.getPieceValue(manager.board[targetSquare]);
                 if (rank == promotionRank) {
                     // promotion moves
-                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_QUEEN, PieceUtil.QUEEN_VALUE + opponentPieceValue));
-                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_ROOK, PieceUtil.ROOK_VALUE + opponentPieceValue));
-                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_BISHOP, PieceUtil.BISHOP_VALUE + opponentPieceValue));
-                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_KNIGHT, PieceUtil.KNIGHT_VALUE + opponentPieceValue));
+                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_QUEEN, 2500 + opponentPieceValue));
+                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_ROOK, 2000 + opponentPieceValue));
+                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_BISHOP, 1500 + opponentPieceValue));
+                    legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_P_KNIGHT, 1400 + opponentPieceValue));
                 } else {
                     legalMoves.add(new Move(pieceSquare, targetSquare, Move.MOVE_DEFAULT, opponentPieceValue));
                 }
